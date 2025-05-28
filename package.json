@@ -1,0 +1,249 @@
+{
+  "name": "agentic-tools-mcp-companion",
+  "displayName": "Agentic Tools MCP Companion",
+  "description": "Companion extension to the MCP server @pimzino/agentic-tools-mcp",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentic-tools",
+          "title": "Agentic Tools",
+          "icon": "$(checklist)"
+        }
+      ]
+    },
+    "views": {
+      "agentic-tools": [
+        {
+          "id": "agenticTasksView",
+          "name": "Tasks",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "id": "agenticMemoriesView",
+          "name": "Memories",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "agentic-tools.refreshTasks",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agentic-tools.createProject",
+        "title": "Create Project",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentic-tools.editProject",
+        "title": "Edit Project",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "agentic-tools.deleteProject",
+        "title": "Delete Project",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agentic-tools.createTask",
+        "title": "Create Task",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentic-tools.editTask",
+        "title": "Edit Task",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "agentic-tools.toggleTask",
+        "title": "Toggle Completion",
+        "icon": "$(check)"
+      },
+      {
+        "command": "agentic-tools.deleteTask",
+        "title": "Delete Task",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agentic-tools.createSubtask",
+        "title": "Create Subtask",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentic-tools.editSubtask",
+        "title": "Edit Subtask",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "agentic-tools.toggleSubtask",
+        "title": "Toggle Completion",
+        "icon": "$(check)"
+      },
+      {
+        "command": "agentic-tools.deleteSubtask",
+        "title": "Delete Subtask",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "agentic-tools.refreshMemories",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agentic-tools.searchMemories",
+        "title": "Search Memories",
+        "icon": "$(search)"
+      },
+      {
+        "command": "agentic-tools.createMemory",
+        "title": "Create Memory",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentic-tools.editMemory",
+        "title": "Edit Memory",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "agentic-tools.deleteMemory",
+        "title": "Delete Memory",
+        "icon": "$(trash)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "agentic-tools.refreshTasks",
+          "when": "view == agenticTasksView",
+          "group": "navigation"
+        },
+        {
+          "command": "agentic-tools.createProject",
+          "when": "view == agenticTasksView",
+          "group": "navigation"
+        },
+        {
+          "command": "agentic-tools.refreshMemories",
+          "when": "view == agenticMemoriesView",
+          "group": "navigation"
+        },
+        {
+          "command": "agentic-tools.searchMemories",
+          "when": "view == agenticMemoriesView",
+          "group": "navigation"
+        },
+        {
+          "command": "agentic-tools.createMemory",
+          "when": "view == agenticMemoriesView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "agentic-tools.editProject",
+          "when": "view == agenticTasksView && viewItem == project",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.createTask",
+          "when": "view == agenticTasksView && viewItem == project",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.deleteProject",
+          "when": "view == agenticTasksView && viewItem == project",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.editTask",
+          "when": "view == agenticTasksView && viewItem == task",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.toggleTask",
+          "when": "view == agenticTasksView && viewItem == task",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.createSubtask",
+          "when": "view == agenticTasksView && viewItem == task",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.deleteTask",
+          "when": "view == agenticTasksView && viewItem == task",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.editSubtask",
+          "when": "view == agenticTasksView && viewItem == subtask",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.toggleSubtask",
+          "when": "view == agenticTasksView && viewItem == subtask",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.deleteSubtask",
+          "when": "view == agenticTasksView && viewItem == subtask",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.editMemory",
+          "when": "view == agenticMemoriesView && viewItem == memory",
+          "group": "inline"
+        },
+        {
+          "command": "agentic-tools.deleteMemory",
+          "when": "view == agenticMemoriesView && viewItem == memory",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "dependencies": {
+    "@lancedb/lancedb": "^0.19.1",
+    "natural": "^8.1.0",
+    "svd-js": "^1.1.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.100.0",
+    "@typescript-eslint/eslint-plugin": "^8.25.0",
+    "@typescript-eslint/parser": "^8.25.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.21.0",
+    "node-loader": "^2.1.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.7.3",
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1"
+  }
+}
