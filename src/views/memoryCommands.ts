@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { MemoryTreeItem, MemoryTreeProvider } from '../providers/memoryTreeProvider';
 import { MemoryService } from '../services/memoryService';
 import { CreateMemoryInput, UpdateMemoryInput, Memory, MEMORY_CONSTANTS } from '../models/index';
+import { MemoryEditor, MemoryEditorData } from '../editors/memoryEditor';
 
 /**
  * Search memories
@@ -44,133 +45,40 @@ export async function searchMemories(memoryService: MemoryService, memoryTreePro
 }
 
 /**
- * Create a new memory
+ * Create a new memory using the rich editor interface
  */
-export async function createMemory(memoryService: MemoryService): Promise<void> {
+export async function createMemory(memoryService: MemoryService, extensionUri: vscode.Uri): Promise<void> {
   try {
-    const title = await vscode.window.showInputBox({
-      prompt: 'Enter memory title',
-      placeHolder: 'Short descriptive title (max 50 characters)',
-      validateInput: (value) => {
-        if (!value || value.trim().length === 0) {
-          return 'Memory title is required';
-        }
-        if (value.trim().length > MEMORY_CONSTANTS.MAX_TITLE_LENGTH) {
-          return `Memory title must be ${MEMORY_CONSTANTS.MAX_TITLE_LENGTH} characters or less`;
-        }
-        return null;
-      }
-    });
+    const memoryEditor = new MemoryEditor(extensionUri, memoryService);
 
-    if (!title) return;
-
-    const content = await vscode.window.showInputBox({
-      prompt: 'Enter memory content',
-      placeHolder: 'Detailed memory content...',
-      validateInput: (value) => {
-        if (!value || value.trim().length === 0) {
-          return 'Memory content is required';
-        }
-        if (value.trim().length > 10000) {
-          return 'Memory content must be 10,000 characters or less';
-        }
-        return null;
-      }
-    });
-
-    if (!content) return;
-
-    const category = await vscode.window.showInputBox({
-      prompt: 'Enter category (optional)',
-      placeHolder: 'e.g., user_preferences, project_context',
-      validateInput: (value) => {
-        if (value && value.length > 100) {
-          return 'Category must be 100 characters or less';
-        }
-        return null;
-      }
-    });
-
-    if (category === undefined) return;
-
-    const input: CreateMemoryInput = {
-      title: title.trim(),
-      content: content.trim(),
-      category: category?.trim() || undefined,
-      metadata: {}
+    const editorData: MemoryEditorData = {
+      mode: 'create'
     };
 
-    await memoryService.createMemory(input);
-    vscode.window.showInformationMessage('Memory created successfully!');
+    await memoryEditor.show(editorData);
   } catch (error) {
-    vscode.window.showErrorMessage(`Failed to create memory: ${error}`);
+    vscode.window.showErrorMessage(`Failed to open memory editor: ${error}`);
   }
 }
 
 /**
- * Edit a memory
+ * Edit a memory using the rich editor interface
  */
-export async function editMemory(memoryService: MemoryService, item: MemoryTreeItem): Promise<void> {
+export async function editMemory(memoryService: MemoryService, item: MemoryTreeItem, extensionUri: vscode.Uri): Promise<void> {
   if (item.type !== 'memory') return;
 
   try {
     const memory = item.data as Memory;
+    const memoryEditor = new MemoryEditor(extensionUri, memoryService);
 
-    const title = await vscode.window.showInputBox({
-      prompt: 'Enter memory title',
-      value: memory.title,
-      validateInput: (value) => {
-        if (!value || value.trim().length === 0) {
-          return 'Memory title is required';
-        }
-        if (value.trim().length > MEMORY_CONSTANTS.MAX_TITLE_LENGTH) {
-          return `Memory title must be ${MEMORY_CONSTANTS.MAX_TITLE_LENGTH} characters or less`;
-        }
-        return null;
-      }
-    });
-
-    if (!title) return;
-
-    const content = await vscode.window.showInputBox({
-      prompt: 'Enter memory content',
-      value: memory.content,
-      validateInput: (value) => {
-        if (!value || value.trim().length === 0) {
-          return 'Memory content is required';
-        }
-        if (value.trim().length > 10000) {
-          return 'Memory content must be 10,000 characters or less';
-        }
-        return null;
-      }
-    });
-
-    if (!content) return;
-
-    const category = await vscode.window.showInputBox({
-      prompt: 'Enter category (optional)',
-      value: memory.category || '',
-      validateInput: (value) => {
-        if (value && value.length > 100) {
-          return 'Category must be 100 characters or less';
-        }
-        return null;
-      }
-    });
-
-    if (category === undefined) return;
-
-    const updates: UpdateMemoryInput = {
-      title: title.trim(),
-      content: content.trim(),
-      category: category?.trim() || undefined
+    const editorData: MemoryEditorData = {
+      mode: 'edit',
+      memory: memory
     };
 
-    await memoryService.updateMemory(memory.id, updates);
-    vscode.window.showInformationMessage('Memory updated successfully!');
+    await memoryEditor.show(editorData);
   } catch (error) {
-    vscode.window.showErrorMessage(`Failed to update memory: ${error}`);
+    vscode.window.showErrorMessage(`Failed to open memory editor: ${error}`);
   }
 }
 
@@ -206,3 +114,5 @@ export function clearSearch(memoryTreeProvider: MemoryTreeProvider): void {
   memoryTreeProvider.clearSearch();
   vscode.window.showInformationMessage('Search cleared.');
 }
+
+

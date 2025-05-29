@@ -168,37 +168,37 @@
         },
         {
           "command": "agentic-tools.editTask",
-          "when": "view == agenticTasksView && viewItem == task",
+          "when": "view == agenticTasksView && (viewItem == task || viewItem == task-completed)",
           "group": "inline"
         },
         {
           "command": "agentic-tools.toggleTask",
-          "when": "view == agenticTasksView && viewItem == task",
+          "when": "view == agenticTasksView && (viewItem == task || viewItem == task-completed)",
           "group": "inline"
         },
         {
           "command": "agentic-tools.createSubtask",
-          "when": "view == agenticTasksView && viewItem == task",
+          "when": "view == agenticTasksView && (viewItem == task || viewItem == task-completed)",
           "group": "inline"
         },
         {
           "command": "agentic-tools.deleteTask",
-          "when": "view == agenticTasksView && viewItem == task",
+          "when": "view == agenticTasksView && (viewItem == task || viewItem == task-completed)",
           "group": "inline"
         },
         {
           "command": "agentic-tools.editSubtask",
-          "when": "view == agenticTasksView && viewItem == subtask",
+          "when": "view == agenticTasksView && (viewItem == subtask || viewItem == subtask-completed)",
           "group": "inline"
         },
         {
           "command": "agentic-tools.toggleSubtask",
-          "when": "view == agenticTasksView && viewItem == subtask",
+          "when": "view == agenticTasksView && (viewItem == subtask || viewItem == subtask-completed)",
           "group": "inline"
         },
         {
           "command": "agentic-tools.deleteSubtask",
-          "when": "view == agenticTasksView && viewItem == subtask",
+          "when": "view == agenticTasksView && (viewItem == subtask || viewItem == subtask-completed)",
           "group": "inline"
         },
         {

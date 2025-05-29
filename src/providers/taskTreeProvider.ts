@@ -42,10 +42,7 @@ export class TaskTreeItem extends vscode.TreeItem {
   }
 
   private getDescription(): string {
-    if (this.type === 'task' || this.type === 'subtask') {
-      const item = this.data as Task | Subtask;
-      return item.completed ? '✓' : '';
-    }
+    // No description needed - completion status is shown via icon change
     return '';
   }
 

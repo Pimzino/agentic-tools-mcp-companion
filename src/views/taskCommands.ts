@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { TaskTreeItem } from '../providers/taskTreeProvider';
 import { TaskService } from '../services/taskService';
-import { CreateTaskInput, CreateSubtaskInput, Task, Subtask } from '../models/index';
+import { Task, Subtask } from '../models/index';
+import { TaskEditor, TaskEditorData } from '../editors/taskEditor';
+import { SubtaskEditor, SubtaskEditorData } from '../editors/subtaskEditor';
 
 /**
  * Delete a project
@@ -27,102 +29,45 @@ export async function deleteProject(taskService: TaskService, item: TaskTreeItem
 }
 
 /**
- * Create a new task
+ * Create a new task using the rich editor interface
  */
-export async function createTask(taskService: TaskService, item: TaskTreeItem): Promise<void> {
+export async function createTask(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
 	if (item.type !== 'project') return;
 
 	try {
 		const project = item.data;
+		const taskEditor = new TaskEditor(extensionUri, taskService);
 
-		const name = await vscode.window.showInputBox({
-			prompt: 'Enter task name',
-			placeHolder: 'My Task',
-			validateInput: (value) => {
-				if (!value || value.trim().length === 0) {
-					return 'Task name is required';
-				}
-				if (value.trim().length > 100) {
-					return 'Task name must be 100 characters or less';
-				}
-				return null;
-			}
-		});
-
-		if (!name) return;
-
-		const details = await vscode.window.showInputBox({
-			prompt: 'Enter task details',
-			placeHolder: 'Task details...',
-			validateInput: (value) => {
-				if (value && value.length > 1000) {
-					return 'Details must be 1000 characters or less';
-				}
-				return null;
-			}
-		});
-
-		if (details === undefined) return;
-
-		const input: CreateTaskInput = {
-			name: name.trim(),
-			details: details?.trim() || '',
-			projectId: project.id
+		const editorData: TaskEditorData = {
+			mode: 'create',
+			projectId: project.id,
+			projectName: project.name
 		};
 
-		await taskService.createTask(input);
-		vscode.window.showInformationMessage(`Task "${name}" created successfully!`);
+		await taskEditor.show(editorData);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to create task: ${error}`);
+		vscode.window.showErrorMessage(`Failed to open task editor: ${error}`);
 	}
 }
 
 /**
- * Edit a task
+ * Edit a task using the rich editor interface
  */
-export async function editTask(taskService: TaskService, item: TaskTreeItem): Promise<void> {
+export async function editTask(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
 	if (item.type !== 'task') return;
 
 	try {
 		const task = item.data as Task;
+		const taskEditor = new TaskEditor(extensionUri, taskService);
 
-		const name = await vscode.window.showInputBox({
-			prompt: 'Enter task name',
-			value: task.name,
-			validateInput: (value) => {
-				if (!value || value.trim().length === 0) {
-					return 'Task name is required';
-				}
-				if (value.trim().length > 100) {
-					return 'Task name must be 100 characters or less';
-				}
-				return null;
-			}
-		});
+		const editorData: TaskEditorData = {
+			mode: 'edit',
+			task: task
+		};
 
-		if (!name) return;
-
-		const details = await vscode.window.showInputBox({
-			prompt: 'Enter task details',
-			value: task.details,
-			validateInput: (value) => {
-				if (value && value.length > 1000) {
-					return 'Details must be 1000 characters or less';
-				}
-				return null;
-			}
-		});
-
-		if (details === undefined) return;
-
-		await taskService.updateTask(task.id, {
-			name: name.trim(),
-			details: details.trim()
-		});
-
-		vscode.window.showInformationMessage(`Task "${name}" updated successfully!`);
+		await taskEditor.show(editorData);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to update task: ${error}`);
+		vscode.window.showErrorMessage(`Failed to open task editor: ${error}`);
 	}
 }
 
@@ -171,102 +116,45 @@ export async function deleteTask(taskService: TaskService, item: TaskTreeItem): 
 }
 
 /**
- * Create a new subtask
+ * Create a new subtask using the rich editor interface
  */
-export async function createSubtask(taskService: TaskService, item: TaskTreeItem): Promise<void> {
+export async function createSubtask(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
 	if (item.type !== 'task') return;
 
 	try {
 		const task = item.data as Task;
+		const subtaskEditor = new SubtaskEditor(extensionUri, taskService);
 
-		const name = await vscode.window.showInputBox({
-			prompt: 'Enter subtask name',
-			placeHolder: 'My Subtask',
-			validateInput: (value) => {
-				if (!value || value.trim().length === 0) {
-					return 'Subtask name is required';
-				}
-				if (value.trim().length > 100) {
-					return 'Subtask name must be 100 characters or less';
-				}
-				return null;
-			}
-		});
-
-		if (!name) return;
-
-		const details = await vscode.window.showInputBox({
-			prompt: 'Enter subtask details',
-			placeHolder: 'Subtask details...',
-			validateInput: (value) => {
-				if (value && value.length > 1000) {
-					return 'Details must be 1000 characters or less';
-				}
-				return null;
-			}
-		});
-
-		if (details === undefined) return;
-
-		const input: CreateSubtaskInput = {
-			name: name.trim(),
-			details: details?.trim() || '',
-			taskId: task.id
+		const editorData: SubtaskEditorData = {
+			mode: 'create',
+			taskId: task.id,
+			taskName: task.name
 		};
 
-		await taskService.createSubtask(input);
-		vscode.window.showInformationMessage(`Subtask "${name}" created successfully!`);
+		await subtaskEditor.show(editorData);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to create subtask: ${error}`);
+		vscode.window.showErrorMessage(`Failed to open subtask editor: ${error}`);
 	}
 }
 
 /**
- * Edit a subtask
+ * Edit a subtask using the rich editor interface
  */
-export async function editSubtask(taskService: TaskService, item: TaskTreeItem): Promise<void> {
+export async function editSubtask(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
 	if (item.type !== 'subtask') return;
 
 	try {
 		const subtask = item.data as Subtask;
+		const subtaskEditor = new SubtaskEditor(extensionUri, taskService);
 
-		const name = await vscode.window.showInputBox({
-			prompt: 'Enter subtask name',
-			value: subtask.name,
-			validateInput: (value) => {
-				if (!value || value.trim().length === 0) {
-					return 'Subtask name is required';
-				}
-				if (value.trim().length > 100) {
-					return 'Subtask name must be 100 characters or less';
-				}
-				return null;
-			}
-		});
+		const editorData: SubtaskEditorData = {
+			mode: 'edit',
+			subtask: subtask
+		};
 
-		if (!name) return;
-
-		const details = await vscode.window.showInputBox({
-			prompt: 'Enter subtask details',
-			value: subtask.details,
-			validateInput: (value) => {
-				if (value && value.length > 1000) {
-					return 'Details must be 1000 characters or less';
-				}
-				return null;
-			}
-		});
-
-		if (details === undefined) return;
-
-		await taskService.updateSubtask(subtask.id, {
-			name: name.trim(),
-			details: details.trim()
-		});
-
-		vscode.window.showInformationMessage(`Subtask "${name}" updated successfully!`);
+		await subtaskEditor.show(editorData);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to update subtask: ${error}`);
+		vscode.window.showErrorMessage(`Failed to open subtask editor: ${error}`);
 	}
 }
 
@@ -313,3 +201,5 @@ export async function deleteSubtask(taskService: TaskService, item: TaskTreeItem
 		vscode.window.showErrorMessage(`Failed to delete subtask: ${error}`);
 	}
 }
+
+

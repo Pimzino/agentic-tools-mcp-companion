@@ -71,11 +71,11 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// Task commands
 		vscode.commands.registerCommand('agentic-tools.createTask', async (item: TaskTreeItem) => {
-			await taskCommands.createTask(taskService, item);
+			await taskCommands.createTask(taskService, item, context.extensionUri);
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.editTask', async (item: TaskTreeItem) => {
-			await taskCommands.editTask(taskService, item);
+			await taskCommands.editTask(taskService, item, context.extensionUri);
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.toggleTask', async (item: TaskTreeItem) => {
@@ -88,11 +88,11 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// Subtask commands
 		vscode.commands.registerCommand('agentic-tools.createSubtask', async (item: TaskTreeItem) => {
-			await taskCommands.createSubtask(taskService, item);
+			await taskCommands.createSubtask(taskService, item, context.extensionUri);
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.editSubtask', async (item: TaskTreeItem) => {
-			await taskCommands.editSubtask(taskService, item);
+			await taskCommands.editSubtask(taskService, item, context.extensionUri);
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.toggleSubtask', async (item: TaskTreeItem) => {
@@ -113,16 +113,18 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.createMemory', async () => {
-			await memoryCommands.createMemory(memoryService);
+			await memoryCommands.createMemory(memoryService, context.extensionUri);
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.editMemory', async (item: MemoryTreeItem) => {
-			await memoryCommands.editMemory(memoryService, item);
+			await memoryCommands.editMemory(memoryService, item, context.extensionUri);
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.deleteMemory', async (item: MemoryTreeItem) => {
 			await memoryCommands.deleteMemory(memoryService, item);
 		}),
+
+
 
 		vscode.commands.registerCommand('agentic-tools.clearSearch', () => {
 			memoryCommands.clearSearch(memoryTreeProvider);
