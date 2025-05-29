@@ -32,7 +32,7 @@ export type {
   MemoryConfig,
 } from './memory';
 
-export { DEFAULT_MEMORY_CONFIG } from './memory';
+export { DEFAULT_MEMORY_CONFIG, MEMORY_CONSTANTS } from './memory';
 
 // Import types for use in interfaces
 import type { Project } from './project';

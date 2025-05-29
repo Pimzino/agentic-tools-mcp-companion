@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as lancedb from '@lancedb/lancedb';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import {
@@ -9,23 +8,34 @@ import {
   SearchMemoryInput,
   MemorySearchResult,
   MemoryConfig,
-  DEFAULT_MEMORY_CONFIG
+  DEFAULT_MEMORY_CONFIG,
+  MEMORY_CONSTANTS
 } from '../models/index';
 import { WorkspaceUtils, FileUtils } from '../utils/index';
-import { TfIdfSvdEmbeddingFunction } from '../utils/embeddingFunction';
+
+/**
+ * JSON file structure for memory storage
+ */
+interface MemoryJsonFile {
+  id: string;
+  title: string;
+  details: string;
+  category: string;
+  dateCreated: string;
+  dateUpdated: string;
+}
 
 /**
  * Service class for memory management operations
- * Handles all CRUD operations for memories with LanceDB integration
+ * Handles all CRUD operations for memories with JSON file storage
  */
 export class MemoryService {
   private static instance: MemoryService;
   private onDataChangedEmitter = new vscode.EventEmitter<void>();
   private config: MemoryConfig;
-  private db: lancedb.Connection | null = null;
-  private table: lancedb.Table | null = null;
-  private embeddingFunction: TfIdfSvdEmbeddingFunction;
-  private corpusNeedsUpdate = true;
+  private workingDirectory: string | null = null;
+  private storageDir: string | null = null;
+  private memoriesDir: string | null = null;
   private isInitialized = false;
 
   /**
@@ -35,7 +45,6 @@ export class MemoryService {
 
   private constructor() {
     this.config = DEFAULT_MEMORY_CONFIG;
-    this.embeddingFunction = new TfIdfSvdEmbeddingFunction(this.config.embeddingDimension);
   }
 
   /**
@@ -59,33 +68,22 @@ export class MemoryService {
     try {
       await WorkspaceUtils.ensureAgenticToolsStructure();
 
-      const workspacePath = WorkspaceUtils.getCurrentWorkspacePath();
-      if (!workspacePath) {
+      this.workingDirectory = WorkspaceUtils.getCurrentWorkspacePath();
+      if (!this.workingDirectory) {
         throw new Error('No workspace folder is open');
       }
 
       // Validate that working directory exists
-      await fs.access(workspacePath);
+      await fs.access(this.workingDirectory);
 
-      const storageDir = path.join(workspacePath, '.agentic-tools-mcp');
-      const dbPath = path.join(storageDir, 'memories');
+      this.storageDir = path.join(this.workingDirectory, '.agentic-tools-mcp');
+      this.memoriesDir = path.join(this.storageDir, 'memories');
 
       // Ensure .agentic-tools-mcp directory exists
-      await fs.mkdir(storageDir, { recursive: true });
+      await fs.mkdir(this.storageDir, { recursive: true });
 
-      // Connect to LanceDB
-      this.db = await lancedb.connect(dbPath);
-
-      // Try to open existing table or create new one
-      try {
-        this.table = await this.db.openTable('agent_memories');
-      } catch (error) {
-        // Table doesn't exist, create it
-        await this.createTable();
-      }
-
-      // Initialize embedding function with existing memories
-      await this.updateEmbeddingCorpus();
+      // Ensure memories directory exists
+      await fs.mkdir(this.memoriesDir, { recursive: true });
 
       this.isInitialized = true;
     } catch (error) {
@@ -94,81 +92,105 @@ export class MemoryService {
   }
 
   /**
-   * Create the agent_memories table with proper schema
+   * Ensure storage is initialized
    */
-  private async createTable(): Promise<void> {
-    if (!this.db) {
-      throw new Error('Database not initialized');
-    }
-
-    try {
-      // Create table with initial empty data to establish schema
-      // Note: LanceDB requires metadata to be a string, not an object
-      // Note: LanceDB expects vector column to be named "vector" for search
-      const initialData = [{
-        id: 'temp-init-record',
-        content: 'temporary initialization record',
-        vector: new Array(this.config.embeddingDimension).fill(0.1), // Use non-zero values for better schema detection
-        metadata: '{"temp": true}', // Store as JSON string
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        agentId: 'temp-agent',
-        category: 'temp-category',
-        importance: 1
-      }];
-
-      this.table = await this.db.createTable('agent_memories', initialData);
-
-      // Delete the temporary record using consistent syntax
-      await this.table.delete(`id = 'temp-init-record'`);
-
-      // Verify table is properly initialized
-      await this.table.query().limit(0).toArray();
-
-    } catch (error) {
-      console.error('❌ Failed to create LanceDB table:', error);
-      throw new Error(`Failed to create agent_memories table: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
-   * Ensure table is available
-   */
-  private ensureTable(): lancedb.Table {
-    if (!this.table) {
+  private ensureInitialized(): void {
+    if (!this.isInitialized || !this.memoriesDir) {
       throw new Error('Storage not initialized. Call initialize() first.');
     }
-    return this.table;
   }
 
   /**
-   * Update the embedding corpus with all existing memories
+   * Sanitize title for use as filename
    */
-  private async updateEmbeddingCorpus(): Promise<void> {
-    if (!this.corpusNeedsUpdate || !this.table) {
-      return;
+  private sanitizeTitle(title: string): string {
+    return title
+      .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid filename characters
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+      .replace(/^_|_$/g, '') // Remove leading/trailing underscores
+      .toLowerCase();
+  }
+
+  /**
+   * Get file path for a memory
+   */
+  private getMemoryFilePath(memory: Memory): string {
+    this.ensureInitialized();
+    const category = memory.category || MEMORY_CONSTANTS.DEFAULT_CATEGORY;
+    const sanitizedTitle = this.sanitizeTitle(memory.title);
+    return path.join(this.memoriesDir!, category, `${sanitizedTitle}.json`);
+  }
+
+  /**
+   * Ensure category directory exists
+   */
+  private async ensureCategoryDirectory(category: string): Promise<void> {
+    this.ensureInitialized();
+    const categoryDir = path.join(this.memoriesDir!, category);
+    await fs.mkdir(categoryDir, { recursive: true });
+  }
+
+  /**
+   * Resolve file name conflicts by appending numbers
+   */
+  private async resolveFileNameConflict(filePath: string): Promise<string> {
+    let counter = 1;
+    let resolvedPath = filePath;
+
+    while (true) {
+      try {
+        await fs.access(resolvedPath);
+        // File exists, try next number
+        const ext = path.extname(filePath);
+        const base = filePath.slice(0, -ext.length);
+        resolvedPath = `${base}_${counter}${ext}`;
+        counter++;
+      } catch {
+        // File doesn't exist, we can use this path
+        break;
+      }
     }
+
+    return resolvedPath;
+  }
+
+  /**
+   * Find memory file by ID across all categories
+   */
+  private async findMemoryFileById(id: string): Promise<string | null> {
+    this.ensureInitialized();
 
     try {
-      const memories = await this.table.query().toArray();
-      const documents = memories.map((row: any) => row.content);
+      const categories = await fs.readdir(this.memoriesDir!, { withFileTypes: true });
 
-      if (documents.length > 0) {
-        await this.embeddingFunction.initializeCorpus(documents);
+      for (const category of categories) {
+        if (category.isDirectory()) {
+          const categoryPath = path.join(this.memoriesDir!, category.name);
+          const files = await fs.readdir(categoryPath);
+
+          for (const file of files) {
+            if (file.endsWith('.json')) {
+              const filePath = path.join(categoryPath, file);
+              try {
+                const content = await fs.readFile(filePath, 'utf-8');
+                const jsonMemory = JSON.parse(content);
+                if (jsonMemory.id === id) {
+                  return filePath;
+                }
+              } catch {
+                // Skip invalid JSON files
+                continue;
+              }
+            }
+          }
+        }
       }
-
-      this.corpusNeedsUpdate = false;
-    } catch (error) {
-      console.warn('Failed to update embedding corpus:', error);
+    } catch {
+      // Directory doesn't exist or other error
     }
-  }
 
-  /**
-   * Generate embedding for content
-   */
-  private async generateEmbedding(content: string): Promise<number[]> {
-    await this.updateEmbeddingCorpus();
-    return await this.embeddingFunction.embed(content);
+    return null;
   }
 
   /**
@@ -183,110 +205,109 @@ export class MemoryService {
    */
   async createMemory(input: CreateMemoryInput): Promise<Memory> {
     await this.initialize();
-    const table = this.ensureTable();
+
+    // Validate title length
+    if (input.title.length > MEMORY_CONSTANTS.MAX_TITLE_LENGTH) {
+      throw new Error(`Memory title must be ${MEMORY_CONSTANTS.MAX_TITLE_LENGTH} characters or less`);
+    }
 
     const now = FileUtils.getCurrentTimestamp();
     const memory: Memory = {
       id: FileUtils.generateId(),
+      title: input.title.trim(),
       content: input.content,
       metadata: input.metadata || {},
       createdAt: now,
       updatedAt: now,
-      agentId: input.agentId,
-      category: input.category,
-      importance: input.importance,
-      embedding: input.embedding
+      category: input.category
     };
 
-    // Generate embedding if not provided
-    if (!memory.embedding && this.config.autoEmbedding) {
-      memory.embedding = await this.generateEmbedding(memory.content);
-    }
+    // Ensure category directory exists
+    await this.ensureCategoryDirectory(memory.category || MEMORY_CONSTANTS.DEFAULT_CATEGORY);
 
-    // Prepare data for LanceDB
-    const data = [{
+    // Create JSON memory object for file storage
+    const jsonMemory: MemoryJsonFile = {
       id: memory.id,
-      content: memory.content,
-      vector: memory.embedding || new Array(this.config.embeddingDimension).fill(0), // Use 'vector' column name
-      metadata: JSON.stringify(memory.metadata),
-      createdAt: memory.createdAt,
-      updatedAt: memory.updatedAt,
-      agentId: memory.agentId || '',
-      category: memory.category || '',
-      importance: memory.importance || 1,
-    }];
+      title: memory.title,
+      details: memory.content,
+      category: memory.category || MEMORY_CONSTANTS.DEFAULT_CATEGORY,
+      dateCreated: memory.createdAt,
+      dateUpdated: memory.updatedAt
+    };
 
-    await table.add(data);
+    // Get file path and handle conflicts
+    let filePath = this.getMemoryFilePath(memory);
+    filePath = await this.resolveFileNameConflict(filePath);
 
-    // Mark corpus for update since we added new content
-    this.corpusNeedsUpdate = true;
+    // Write to file
+    await fs.writeFile(filePath, JSON.stringify(jsonMemory, null, 2), 'utf-8');
 
     this.onDataChangedEmitter.fire();
     return memory;
   }
 
   /**
-   * Search memories by semantic similarity
+   * Search memories using text-based matching
    */
   async searchMemories(input: SearchMemoryInput): Promise<MemorySearchResult[]> {
     await this.initialize();
-    const table = this.ensureTable();
 
-    let queryVector: number[];
+    const allMemories = await this.getMemories(undefined, input.category);
+    const query = input.query.toLowerCase();
+    const results: MemorySearchResult[] = [];
 
-    if (typeof input.query === 'string') {
-      // Generate embedding for text query
-      queryVector = await this.generateEmbedding(input.query);
-    } else {
-      // Use provided vector
-      queryVector = input.query;
-    }
-
-    // Use search() method which expects the vector column to be named "vector"
-    let query = table.search(queryVector)
-      .limit(input.limit || this.config.defaultLimit);
-
-    // Apply filters (search() method - try backticks for agentId)
-    const filters: string[] = [];
-    if (input.agentId) {
-      filters.push(`\`agentId\` = '${input.agentId}'`);
-    }
-    if (input.category) {
-      filters.push(`category = '${input.category}'`);
-    }
-    if (input.minImportance) {
-      filters.push(`importance >= ${input.minImportance}`);
-    }
-
-    if (filters.length > 0) {
-      query = query.where(filters.join(' AND '));
-    }
-
-    const results = await query.toArray();
-
-    return results.map((row: any) => {
-      const memory: Memory = {
-        id: row.id,
-        content: row.content,
-        embedding: row.vector,
-        metadata: row.metadata ? JSON.parse(row.metadata) : {},
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-        agentId: row.agentId || undefined,
-        category: row.category || undefined,
-        importance: row.importance || undefined,
-      };
-
-      return {
-        memory,
-        score: row._distance ? 1 - row._distance : 0, // Convert distance to similarity score
-        distance: row._distance || 0
-      };
-    }).filter(result => {
-      // Apply threshold filter
+    for (const memory of allMemories) {
+      const score = this.calculateRelevanceScore(memory, query);
       const threshold = input.threshold || this.config.defaultThreshold;
-      return result.score >= threshold;
-    });
+
+      if (score >= threshold) {
+        results.push({
+          memory,
+          score
+        });
+      }
+    }
+
+    // Sort by score (highest first) and apply limit
+    results.sort((a, b) => b.score - a.score);
+    const limit = input.limit || this.config.defaultLimit;
+    return results.slice(0, limit);
+  }
+
+  /**
+   * Calculate relevance score for text-based search
+   */
+  private calculateRelevanceScore(memory: Memory, query: string): number {
+    const title = memory.title.toLowerCase();
+    const content = memory.content.toLowerCase();
+    let score = 0;
+
+    // Title matches (higher weight)
+    if (title.includes(query)) {
+      if (title.startsWith(query)) {
+        score += 0.8; // Title starts with query
+      } else if (title.endsWith(query)) {
+        score += 0.6; // Title ends with query
+      } else {
+        score += 0.4; // Title contains query
+      }
+    }
+
+    // Content matches (lower weight)
+    if (content.includes(query)) {
+      const contentWords = content.split(/\s+/);
+      const queryWords = query.split(/\s+/);
+      const matchingWords = queryWords.filter(word => content.includes(word));
+      const matchRatio = matchingWords.length / queryWords.length;
+      score += matchRatio * 0.3;
+    }
+
+    // Category bonus (small boost)
+    if (memory.category && memory.category.toLowerCase().includes(query)) {
+      score += 0.1;
+    }
+
+    return Math.min(score, 1.0); // Cap at 1.0
   }
 
   /**
@@ -294,40 +315,76 @@ export class MemoryService {
    */
   async getMemories(agentId?: string, category?: string, limit?: number): Promise<Memory[]> {
     await this.initialize();
-    const table = this.ensureTable();
+    this.ensureInitialized();
 
-    let query = table.query();
+    const memories: Memory[] = [];
 
-    // Apply filters
-    const filters: string[] = [];
-    if (agentId) {
-      filters.push(`\`agentId\` = '${agentId}'`);
+    try {
+      // If category is specified, only search that category
+      const categoriesToSearch = category ? [category] : await this.getAllCategories();
+
+      for (const cat of categoriesToSearch) {
+        const categoryPath = path.join(this.memoriesDir!, cat);
+
+        try {
+          const files = await fs.readdir(categoryPath);
+
+          for (const file of files) {
+            if (file.endsWith('.json')) {
+              const filePath = path.join(categoryPath, file);
+              try {
+                const content = await fs.readFile(filePath, 'utf-8');
+                const jsonMemory: MemoryJsonFile = JSON.parse(content);
+
+                // Convert to Memory interface
+                const memory: Memory = {
+                  id: jsonMemory.id,
+                  title: jsonMemory.title,
+                  content: jsonMemory.details,
+                  metadata: {},
+                  createdAt: jsonMemory.dateCreated,
+                  updatedAt: jsonMemory.dateUpdated,
+                  category: jsonMemory.category === MEMORY_CONSTANTS.DEFAULT_CATEGORY ? undefined : jsonMemory.category
+                };
+
+                memories.push(memory);
+              } catch {
+                // Skip invalid JSON files
+                continue;
+              }
+            }
+          }
+        } catch {
+          // Category directory doesn't exist, skip
+          continue;
+        }
+      }
+    } catch {
+      // Memories directory doesn't exist
     }
-    if (category) {
-      filters.push(`category = '${category}'`);
+
+    // Apply limit if specified
+    if (limit && limit > 0) {
+      return memories.slice(0, limit);
     }
 
-    if (filters.length > 0) {
-      query = query.where(filters.join(' AND '));
+    return memories;
+  }
+
+  /**
+   * Get all category directories
+   */
+  private async getAllCategories(): Promise<string[]> {
+    this.ensureInitialized();
+
+    try {
+      const entries = await fs.readdir(this.memoriesDir!, { withFileTypes: true });
+      return entries
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name);
+    } catch {
+      return [MEMORY_CONSTANTS.DEFAULT_CATEGORY];
     }
-
-    if (limit) {
-      query = query.limit(limit);
-    }
-
-    const results = await query.toArray();
-
-    return results.map((row: any) => ({
-      id: row.id,
-      content: row.content,
-      embedding: row.vector,
-      metadata: row.metadata ? JSON.parse(row.metadata) : {},
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      agentId: row.agentId || undefined,
-      category: row.category || undefined,
-      importance: row.importance || undefined,
-    }));
   }
 
   /**
@@ -335,26 +392,25 @@ export class MemoryService {
    */
   async getMemory(id: string): Promise<Memory | null> {
     await this.initialize();
-    const table = this.ensureTable();
+
+    const filePath = await this.findMemoryFileById(id);
+    if (!filePath) {
+      return null;
+    }
 
     try {
-      const results = await table.query().where(`id = '${id}'`).toArray();
+      const content = await fs.readFile(filePath, 'utf-8');
+      const jsonMemory: MemoryJsonFile = JSON.parse(content);
 
-      if (results.length === 0) {
-        return null;
-      }
-
-      const row = results[0];
+      // Convert to Memory interface
       return {
-        id: row.id,
-        content: row.content,
-        embedding: row.vector,
-        metadata: row.metadata ? JSON.parse(row.metadata) : {},
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-        agentId: row.agentId || undefined,
-        category: row.category || undefined,
-        importance: row.importance || undefined,
+        id: jsonMemory.id,
+        title: jsonMemory.title,
+        content: jsonMemory.details,
+        metadata: {},
+        createdAt: jsonMemory.dateCreated,
+        updatedAt: jsonMemory.dateUpdated,
+        category: jsonMemory.category === MEMORY_CONSTANTS.DEFAULT_CATEGORY ? undefined : jsonMemory.category
       };
     } catch (error) {
       return null;
@@ -365,32 +421,65 @@ export class MemoryService {
    * Update an existing memory
    */
   async updateMemory(id: string, updates: UpdateMemoryInput): Promise<Memory | null> {
-    const existingMemory = await this.getMemory(id);
-    if (!existingMemory) {
+    const filePath = await this.findMemoryFileById(id);
+    if (!filePath) {
       return null;
     }
 
-    // Merge updates
-    const updatedMemory: Memory = {
-      ...existingMemory,
-      ...updates,
-      id: existingMemory.id, // Ensure ID doesn't change
-      updatedAt: new Date().toISOString(),
-    };
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const jsonMemory: MemoryJsonFile = JSON.parse(content);
 
-    // Regenerate embedding if content changed
-    if (updates.content && this.config.autoEmbedding) {
-      updatedMemory.embedding = await this.generateEmbedding(updatedMemory.content);
+      // Convert to Memory interface for merging
+      const existingMemory: Memory = {
+        id: jsonMemory.id,
+        title: jsonMemory.title,
+        content: jsonMemory.details,
+        metadata: {},
+        createdAt: jsonMemory.dateCreated,
+        updatedAt: jsonMemory.dateUpdated,
+        category: jsonMemory.category === MEMORY_CONSTANTS.DEFAULT_CATEGORY ? undefined : jsonMemory.category
+      };
+
+      // Validate title length if being updated
+      if (updates.title && updates.title.length > MEMORY_CONSTANTS.MAX_TITLE_LENGTH) {
+        throw new Error(`Memory title must be ${MEMORY_CONSTANTS.MAX_TITLE_LENGTH} characters or less`);
+      }
+
+      // Merge updates
+      const updatedMemory: Memory = {
+        ...existingMemory,
+        ...updates,
+        id: existingMemory.id, // Ensure ID doesn't change
+        updatedAt: new Date().toISOString(),
+      };
+
+      // If category changed, we need to move the file
+      if (updates.category !== undefined && updates.category !== existingMemory.category) {
+        // Delete old file
+        await fs.unlink(filePath);
+
+        // Create new file in new category
+        await this.createMemory(updatedMemory);
+      } else {
+        // Update existing file
+        const updatedJsonMemory: MemoryJsonFile = {
+          id: updatedMemory.id,
+          title: updatedMemory.title,
+          details: updatedMemory.content,
+          category: updatedMemory.category || MEMORY_CONSTANTS.DEFAULT_CATEGORY,
+          dateCreated: updatedMemory.createdAt,
+          dateUpdated: updatedMemory.updatedAt
+        };
+
+        await fs.writeFile(filePath, JSON.stringify(updatedJsonMemory, null, 2), 'utf-8');
+      }
+
+      this.onDataChangedEmitter.fire();
+      return updatedMemory;
+    } catch (error) {
+      return null;
     }
-
-    // Delete old record and insert updated one
-    await this.deleteMemory(id);
-    await this.createMemory(updatedMemory);
-
-    // Mark corpus for update since content may have changed
-    this.corpusNeedsUpdate = true;
-
-    return updatedMemory;
   }
 
   /**
@@ -398,12 +487,14 @@ export class MemoryService {
    */
   async deleteMemory(id: string): Promise<boolean> {
     await this.initialize();
-    const table = this.ensureTable();
+
+    const filePath = await this.findMemoryFileById(id);
+    if (!filePath) {
+      return false;
+    }
 
     try {
-      await table.delete(`id = '${id}'`);
-      // Mark corpus for update since we removed content
-      this.corpusNeedsUpdate = true;
+      await fs.unlink(filePath);
       this.onDataChangedEmitter.fire();
       return true;
     } catch (error) {
@@ -436,11 +527,8 @@ export class MemoryService {
       return stats;
     }
 
-    // Count by agent and category
+    // Count by category (agentId no longer supported)
     memories.forEach(memory => {
-      if (memory.agentId) {
-        stats.memoriesByAgent[memory.agentId] = (stats.memoriesByAgent[memory.agentId] || 0) + 1;
-      }
       if (memory.category) {
         stats.memoriesByCategory[memory.category] = (stats.memoriesByCategory[memory.category] || 0) + 1;
       }

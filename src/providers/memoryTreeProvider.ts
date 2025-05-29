@@ -22,7 +22,7 @@ export class MemoryTreeItem extends vscode.TreeItem {
       type === 'search-prompt' ? 'Search memories...' :
       type === 'clear-search' ? 'Back to categories' :
       type === 'category' ? `📁 ${data as string}` :
-      (data as Memory).content.substring(0, 50) + ((data as Memory).content.length > 50 ? '...' : ''),
+      (data as Memory).title,
       collapsibleState
     );
 
@@ -46,14 +46,14 @@ export class MemoryTreeItem extends vscode.TreeItem {
         return `Category: ${this.data as string}`;
       case 'memory':
         const memory = this.data as Memory;
-        return `${memory.content}\n\nCategory: ${memory.category || 'None'}\nImportance: ${memory.importance || 'None'}\nCreated: ${new Date(memory.createdAt).toLocaleString()}`;
+        return `Title: ${memory.title}\n\n${memory.content}\n\nCategory: ${memory.category || 'None'}\nCreated: ${new Date(memory.createdAt).toLocaleString()}`;
     }
   }
 
   private getDescription(): string {
     if (this.type === 'memory') {
       const memory = this.data as Memory;
-      return memory.importance ? `⭐${memory.importance}` : '';
+      return memory.category || '';
     }
     return '';
   }

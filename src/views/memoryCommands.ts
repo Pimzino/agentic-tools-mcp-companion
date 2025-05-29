@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { MemoryTreeItem, MemoryTreeProvider } from '../providers/memoryTreeProvider';
 import { MemoryService } from '../services/memoryService';
-import { CreateMemoryInput, UpdateMemoryInput, Memory } from '../models/index';
+import { CreateMemoryInput, UpdateMemoryInput, Memory, MEMORY_CONSTANTS } from '../models/index';
 
 /**
  * Search memories
@@ -48,9 +48,25 @@ export async function searchMemories(memoryService: MemoryService, memoryTreePro
  */
 export async function createMemory(memoryService: MemoryService): Promise<void> {
   try {
+    const title = await vscode.window.showInputBox({
+      prompt: 'Enter memory title',
+      placeHolder: 'Short descriptive title (max 50 characters)',
+      validateInput: (value) => {
+        if (!value || value.trim().length === 0) {
+          return 'Memory title is required';
+        }
+        if (value.trim().length > MEMORY_CONSTANTS.MAX_TITLE_LENGTH) {
+          return `Memory title must be ${MEMORY_CONSTANTS.MAX_TITLE_LENGTH} characters or less`;
+        }
+        return null;
+      }
+    });
+
+    if (!title) return;
+
     const content = await vscode.window.showInputBox({
       prompt: 'Enter memory content',
-      placeHolder: 'What would you like to remember?',
+      placeHolder: 'Detailed memory content...',
       validateInput: (value) => {
         if (!value || value.trim().length === 0) {
           return 'Memory content is required';
@@ -77,43 +93,10 @@ export async function createMemory(memoryService: MemoryService): Promise<void> 
 
     if (category === undefined) return;
 
-    const agentId = await vscode.window.showInputBox({
-      prompt: 'Enter agent ID (optional)',
-      placeHolder: 'e.g., assistant-1',
-      validateInput: (value) => {
-        if (value && value.length > 100) {
-          return 'Agent ID must be 100 characters or less';
-        }
-        return null;
-      }
-    });
-
-    if (agentId === undefined) return;
-
-    const importanceStr = await vscode.window.showInputBox({
-      prompt: 'Enter importance (1-10, optional)',
-      placeHolder: '5',
-      validateInput: (value) => {
-        if (value && value.trim().length > 0) {
-          const num = parseInt(value.trim());
-          if (isNaN(num) || num < 1 || num > 10) {
-            return 'Importance must be a number between 1 and 10';
-          }
-        }
-        return null;
-      }
-    });
-
-    if (importanceStr === undefined) return;
-
-    const importance = importanceStr && importanceStr.trim().length > 0 ?
-      parseInt(importanceStr.trim()) : undefined;
-
     const input: CreateMemoryInput = {
+      title: title.trim(),
       content: content.trim(),
       category: category?.trim() || undefined,
-      agentId: agentId?.trim() || undefined,
-      importance,
       metadata: {}
     };
 
@@ -132,6 +115,22 @@ export async function editMemory(memoryService: MemoryService, item: MemoryTreeI
 
   try {
     const memory = item.data as Memory;
+
+    const title = await vscode.window.showInputBox({
+      prompt: 'Enter memory title',
+      value: memory.title,
+      validateInput: (value) => {
+        if (!value || value.trim().length === 0) {
+          return 'Memory title is required';
+        }
+        if (value.trim().length > MEMORY_CONSTANTS.MAX_TITLE_LENGTH) {
+          return `Memory title must be ${MEMORY_CONSTANTS.MAX_TITLE_LENGTH} characters or less`;
+        }
+        return null;
+      }
+    });
+
+    if (!title) return;
 
     const content = await vscode.window.showInputBox({
       prompt: 'Enter memory content',
@@ -162,29 +161,10 @@ export async function editMemory(memoryService: MemoryService, item: MemoryTreeI
 
     if (category === undefined) return;
 
-    const importanceStr = await vscode.window.showInputBox({
-      prompt: 'Enter importance (1-10, optional)',
-      value: memory.importance?.toString() || '',
-      validateInput: (value) => {
-        if (value && value.trim().length > 0) {
-          const num = parseInt(value.trim());
-          if (isNaN(num) || num < 1 || num > 10) {
-            return 'Importance must be a number between 1 and 10';
-          }
-        }
-        return null;
-      }
-    });
-
-    if (importanceStr === undefined) return;
-
-    const importance = importanceStr && importanceStr.trim().length > 0 ?
-      parseInt(importanceStr.trim()) : undefined;
-
     const updates: UpdateMemoryInput = {
+      title: title.trim(),
       content: content.trim(),
-      category: category?.trim() || undefined,
-      importance
+      category: category?.trim() || undefined
     };
 
     await memoryService.updateMemory(memory.id, updates);
@@ -202,9 +182,7 @@ export async function deleteMemory(memoryService: MemoryService, item: MemoryTre
 
   try {
     const memory = item.data as Memory;
-    const preview = memory.content.length > 100 ?
-      memory.content.substring(0, 100) + '...' :
-      memory.content;
+    const preview = memory.title;
 
     const confirmation = await vscode.window.showWarningMessage(
       `Are you sure you want to delete this memory?\n\n"${preview}"`,

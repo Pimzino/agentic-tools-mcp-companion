@@ -11,11 +11,11 @@ A VSCode extension that provides a GUI interface for the [agentic-tools-mcp](htt
 - **Context Menus**: Right-click actions for all operations
 - **Real-time Updates**: Automatic refresh when data changes
 
-### 🧠 Memory Management (Coming Soon)
-- **Semantic Search**: Find memories using natural language queries
-- **Category Organization**: Organize memories by category and importance
-- **Agent-specific Storage**: Support for multi-agent scenarios
-- **Metadata Management**: Rich metadata support for enhanced context
+### 🧠 Memory Management
+- **Text-based Search**: Find memories using natural language queries with relevance scoring
+- **Category Organization**: Organize memories by category with directory-based structure
+- **Title + Content Architecture**: Separate title (50 chars max) and detailed content fields
+- **JSON File Storage**: Human-readable JSON files for easy portability and version control
 
 ### 🔄 Data Compatibility
 - **100% Compatible**: Works seamlessly with existing agentic-tools-mcp data
@@ -62,7 +62,12 @@ your-workspace/
 ├── .agentic-tools-mcp/
 │   ├── tasks/
 │   │   └── tasks.json      # Projects, tasks, and subtasks
-│   └── memories/           # Memory database (coming soon)
+│   └── memories/           # Memory JSON files organized by category
+│       ├── general/        # Default category
+│       │   ├── memory1.json
+│       │   └── memory2.json
+│       └── user_preferences/
+│           └── settings.json
 ├── src/
 └── package.json
 ```
@@ -75,9 +80,9 @@ This extension contributes the following settings:
 
 ## Known Issues
 
-- Memory management interface is not yet implemented
 - File watching uses polling instead of native file system events
 - Large datasets may impact performance
+- Memory search is case-sensitive and uses simple text matching
 
 ## Development
 
@@ -92,11 +97,13 @@ To contribute to this extension:
 
 ### 0.0.1
 
-Initial release with task management functionality:
-- Hierarchical tree view for projects, tasks, and subtasks
-- Complete CRUD operations
-- Context menus and keyboard shortcuts
-- Data compatibility with agentic-tools-mcp server
+Initial release with comprehensive functionality:
+- **Task Management**: Hierarchical tree view for projects, tasks, and subtasks
+- **Memory Management**: JSON file-based storage with title/content architecture
+- **Complete CRUD Operations**: Create, read, update, delete for all entities
+- **Text-based Search**: Relevance-scored memory search functionality
+- **Context Menus**: Right-click actions for all operations
+- **Data Compatibility**: 100% compatible with agentic-tools-mcp server v1.4.0+
 
 ---
 

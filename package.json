@@ -226,9 +226,6 @@
     "test": "vscode-test"
   },
   "dependencies": {
-    "@lancedb/lancedb": "^0.19.1",
-    "natural": "^8.1.0",
-    "svd-js": "^1.1.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {
