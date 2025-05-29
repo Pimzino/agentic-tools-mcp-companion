@@ -13,6 +13,18 @@ import {
 } from '../models/index';
 import { WorkspaceUtils, FileUtils } from '../utils/index';
 
+export interface SearchTaskInput {
+  query: string;
+  limit?: number;
+  threshold?: number;
+}
+
+export interface TaskSearchResult {
+  task: Task;
+  score: number;
+  projectName: string;
+}
+
 /**
  * Service class for task management operations
  * Handles all CRUD operations for projects, tasks, and subtasks
@@ -389,6 +401,68 @@ export class TaskService {
         tasks: projectTasks
       };
     });
+  }
+
+  /**
+   * Search tasks using text-based matching
+   */
+  async searchTasks(input: SearchTaskInput): Promise<TaskSearchResult[]> {
+    const data = await this.loadData();
+    const query = input.query.toLowerCase();
+    const results: TaskSearchResult[] = [];
+
+    // Create a map of project names for quick lookup
+    const projectMap = new Map(data.projects.map(p => [p.id, p.name]));
+
+    for (const task of data.tasks) {
+      const score = this.calculateTaskRelevanceScore(task, query);
+      const threshold = input.threshold || 0.3;
+
+      if (score >= threshold) {
+        const projectName = projectMap.get(task.projectId) || 'Unknown Project';
+        results.push({
+          task,
+          score,
+          projectName
+        });
+      }
+    }
+
+    // Sort by score (highest first) and apply limit
+    results.sort((a, b) => b.score - a.score);
+    const limit = input.limit || 50;
+    return results.slice(0, limit);
+  }
+
+  /**
+   * Calculate relevance score for task search
+   */
+  private calculateTaskRelevanceScore(task: Task, query: string): number {
+    const name = task.name.toLowerCase();
+    const details = task.details.toLowerCase();
+    let score = 0;
+
+    // Name matches (higher weight)
+    if (name.includes(query)) {
+      if (name.startsWith(query)) {
+        score += 0.8; // Name starts with query
+      } else if (name.endsWith(query)) {
+        score += 0.6; // Name ends with query
+      } else {
+        score += 0.4; // Name contains query
+      }
+    }
+
+    // Details matches (lower weight)
+    if (details.includes(query)) {
+      const detailsWords = details.split(/\s+/);
+      const queryWords = query.split(/\s+/);
+      const matchingWords = queryWords.filter(word => details.includes(word));
+      const matchRatio = matchingWords.length / queryWords.length;
+      score += matchRatio * 0.3;
+    }
+
+    return Math.min(score, 1.0); // Cap at 1.0
   }
 
   /**

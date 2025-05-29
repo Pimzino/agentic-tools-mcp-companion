@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { TaskTreeItem } from '../providers/taskTreeProvider';
+import { TaskTreeItem, TaskTreeProvider } from '../providers/taskTreeProvider';
 import { TaskService } from '../services/taskService';
-import { Task, Subtask } from '../models/index';
+import { Project, Task, Subtask } from '../models/index';
 import { TaskEditor, TaskEditorData } from '../editors/taskEditor';
 import { SubtaskEditor, SubtaskEditorData } from '../editors/subtaskEditor';
 
@@ -12,7 +12,7 @@ export async function deleteProject(taskService: TaskService, item: TaskTreeItem
 	if (item.type !== 'project') return;
 
 	try {
-		const project = item.data;
+		const project = item.data as Project;
 		const confirmation = await vscode.window.showWarningMessage(
 			`Are you sure you want to delete project "${project.name}"? This will also delete all tasks and subtasks in this project.`,
 			{ modal: true },
@@ -35,7 +35,7 @@ export async function createTask(taskService: TaskService, item: TaskTreeItem, e
 	if (item.type !== 'project') return;
 
 	try {
-		const project = item.data;
+		const project = item.data as Project;
 		const taskEditor = new TaskEditor(extensionUri, taskService);
 
 		const editorData: TaskEditorData = {
@@ -57,7 +57,17 @@ export async function editTask(taskService: TaskService, item: TaskTreeItem, ext
 	if (item.type !== 'task') return;
 
 	try {
-		const task = item.data as Task;
+		// Handle both regular tasks and search result tasks
+		let task: Task;
+		if ('projectName' in (item.data as any)) {
+			// Search result task
+			const searchResult = item.data as any;
+			task = searchResult.task;
+		} else {
+			// Regular task
+			task = item.data as Task;
+		}
+
 		const taskEditor = new TaskEditor(extensionUri, taskService);
 
 		const editorData: TaskEditorData = {
@@ -200,6 +210,52 @@ export async function deleteSubtask(taskService: TaskService, item: TaskTreeItem
 	} catch (error) {
 		vscode.window.showErrorMessage(`Failed to delete subtask: ${error}`);
 	}
+}
+
+/**
+ * Search tasks
+ */
+export async function searchTasks(taskService: TaskService, taskTreeProvider: TaskTreeProvider): Promise<void> {
+	try {
+		const query = await vscode.window.showInputBox({
+			prompt: 'Enter search query',
+			placeHolder: 'Search for tasks...',
+			validateInput: (value) => {
+				if (!value || value.trim().length === 0) {
+					return 'Search query is required';
+				}
+				if (value.trim().length > 500) {
+					return 'Search query must be 500 characters or less';
+				}
+				return null;
+			}
+		});
+
+		if (!query) return;
+
+		const results = await taskService.searchTasks({
+			query: query.trim(),
+			limit: 50
+		});
+
+		taskTreeProvider.setSearchResults(results);
+
+		if (results.length === 0) {
+			vscode.window.showInformationMessage('No tasks found matching your search.');
+		} else {
+			vscode.window.showInformationMessage(`Found ${results.length} matching tasks.`);
+		}
+	} catch (error) {
+		vscode.window.showErrorMessage(`Failed to search tasks: ${error}`);
+	}
+}
+
+/**
+ * Clear task search results
+ */
+export function clearTaskSearch(taskTreeProvider: TaskTreeProvider): void {
+	taskTreeProvider.clearSearch();
+	vscode.window.showInformationMessage('Search cleared.');
 }
 
 

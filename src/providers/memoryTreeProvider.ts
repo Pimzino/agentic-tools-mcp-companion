@@ -20,8 +20,8 @@ export class MemoryTreeItem extends vscode.TreeItem {
   ) {
     super(
       type === 'search-prompt' ? 'Search memories...' :
-      type === 'clear-search' ? 'Back to categories' :
-      type === 'category' ? `📁 ${data as string}` :
+      type === 'clear-search' ? 'Back to memories' :
+      type === 'category' ? (data as string) :
       (data as Memory).title,
       collapsibleState
     );
@@ -41,7 +41,7 @@ export class MemoryTreeItem extends vscode.TreeItem {
       case 'search-prompt':
         return 'Click to search memories';
       case 'clear-search':
-        return 'Return to category view';
+        return 'Return to memories view';
       case 'category':
         return `Category: ${this.data as string}`;
       case 'memory':
@@ -63,7 +63,7 @@ export class MemoryTreeItem extends vscode.TreeItem {
       case 'search-prompt':
         return new vscode.ThemeIcon('search');
       case 'clear-search':
-        return new vscode.ThemeIcon('home');
+        return new vscode.ThemeIcon('arrow-left');
       case 'category':
         return new vscode.ThemeIcon('folder');
       case 'memory':
@@ -177,6 +177,13 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<MemoryTreeIte
   private async getRootItems(): Promise<MemoryTreeItem[]> {
     const items: MemoryTreeItem[] = [];
 
+    // Add search prompt at the top
+    items.push(new MemoryTreeItem(
+      'search-prompt',
+      'search-prompt',
+      vscode.TreeItemCollapsibleState.None
+    ));
+
     // Get all memories and group by category
     const memories = await this.memoryService.getMemories();
     const categories = new Set<string>();
@@ -215,7 +222,7 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<MemoryTreeIte
   private getSearchResultItems(): MemoryTreeItem[] {
     const items: MemoryTreeItem[] = [];
 
-    // Add "Back to categories" item at the top
+    // Add "Back to memories" item at the top
     items.push(new MemoryTreeItem(
       'clear-search',
       'clear-search',
@@ -237,10 +244,19 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<MemoryTreeIte
    */
   private async getMemoriesInCategory(category: string): Promise<MemoryTreeItem[]> {
     const memories = await this.memoryService.getMemories(undefined, category);
+
+    // Create the parent category item for proper hierarchy
+    const categoryItem = new MemoryTreeItem(
+      'category',
+      category,
+      vscode.TreeItemCollapsibleState.Collapsed
+    );
+
     return memories.map(memory => new MemoryTreeItem(
       'memory',
       memory,
-      vscode.TreeItemCollapsibleState.None
+      vscode.TreeItemCollapsibleState.None,
+      categoryItem // Set parent for proper indentation
     ));
   }
 

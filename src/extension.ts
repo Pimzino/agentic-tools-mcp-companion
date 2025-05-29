@@ -43,8 +43,28 @@ export function activate(context: vscode.ExtensionContext) {
 	memoryTreeView.onDidChangeSelection(e => {
 		if (e.selection.length > 0) {
 			const item = e.selection[0];
-			if (item.type === 'clear-search') {
+			if (item.type === 'search-prompt') {
+				vscode.commands.executeCommand('agentic-tools.searchMemories');
+			} else if (item.type === 'clear-search') {
 				vscode.commands.executeCommand('agentic-tools.onMemoryTreeItemClick', item);
+			} else if (item.type === 'memory') {
+				vscode.commands.executeCommand('agentic-tools.editMemory', item);
+			}
+		}
+	});
+
+	// Handle tree item selection for task view
+	taskTreeView.onDidChangeSelection(e => {
+		if (e.selection.length > 0) {
+			const item = e.selection[0];
+			if (item.type === 'search-prompt') {
+				vscode.commands.executeCommand('agentic-tools.searchTasks');
+			} else if (item.type === 'clear-search') {
+				vscode.commands.executeCommand('agentic-tools.onTaskTreeItemClick', item);
+			} else if (item.type === 'task') {
+				vscode.commands.executeCommand('agentic-tools.editTask', item);
+			} else if (item.type === 'subtask') {
+				vscode.commands.executeCommand('agentic-tools.editSubtask', item);
 			}
 		}
 	});
@@ -54,6 +74,14 @@ export function activate(context: vscode.ExtensionContext) {
 		// Tree view commands
 		vscode.commands.registerCommand('agentic-tools.refreshTasks', () => {
 			taskTreeProvider.refresh();
+		}),
+
+		vscode.commands.registerCommand('agentic-tools.searchTasks', async () => {
+			await taskCommands.searchTasks(taskService, taskTreeProvider);
+		}),
+
+		vscode.commands.registerCommand('agentic-tools.clearTaskSearch', () => {
+			taskCommands.clearTaskSearch(taskTreeProvider);
 		}),
 
 		// Project commands
@@ -134,6 +162,12 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('agentic-tools.onMemoryTreeItemClick', async (item: MemoryTreeItem) => {
 			if (item.type === 'clear-search') {
 				memoryCommands.clearSearch(memoryTreeProvider);
+			}
+		}),
+
+		vscode.commands.registerCommand('agentic-tools.onTaskTreeItemClick', async (item: TaskTreeItem) => {
+			if (item.type === 'clear-search') {
+				taskCommands.clearTaskSearch(taskTreeProvider);
 			}
 		})
 	];

@@ -16,7 +16,7 @@
       "activitybar": [
         {
           "id": "agentic-tools",
-          "title": "Agentic Tools",
+          "title": "Agentic Tools MCP Companion",
           "icon": "$(checklist)"
         }
       ]
@@ -40,6 +40,11 @@
         "command": "agentic-tools.refreshTasks",
         "title": "Refresh",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "agentic-tools.searchTasks",
+        "title": "Search Tasks",
+        "icon": "$(search)"
       },
       {
         "command": "agentic-tools.createProject",
@@ -126,6 +131,11 @@
       "view/title": [
         {
           "command": "agentic-tools.refreshTasks",
+          "when": "view == agenticTasksView",
+          "group": "navigation"
+        },
+        {
+          "command": "agentic-tools.searchTasks",
           "when": "view == agenticTasksView",
           "group": "navigation"
         },
