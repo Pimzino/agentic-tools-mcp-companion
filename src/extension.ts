@@ -77,7 +77,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.searchTasks', async () => {
-			await taskCommands.searchTasks(taskService, taskTreeProvider);
+			await taskCommands.searchTasks(taskService, taskTreeProvider, context.extensionUri);
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.clearTaskSearch', () => {
@@ -137,7 +137,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.searchMemories', async () => {
-			await memoryCommands.searchMemories(memoryService, memoryTreeProvider);
+			await memoryCommands.searchMemories(memoryService, memoryTreeProvider, context.extensionUri);
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.createMemory', async () => {

@@ -213,40 +213,118 @@ export async function deleteSubtask(taskService: TaskService, item: TaskTreeItem
 }
 
 /**
- * Search tasks
+ * Search tasks with real-time QuickPick interface
  */
-export async function searchTasks(taskService: TaskService, taskTreeProvider: TaskTreeProvider): Promise<void> {
+export async function searchTasks(taskService: TaskService, taskTreeProvider: TaskTreeProvider, extensionUri: vscode.Uri): Promise<void> {
 	try {
-		const query = await vscode.window.showInputBox({
-			prompt: 'Enter search query',
-			placeHolder: 'Search for tasks...',
-			validateInput: (value) => {
-				if (!value || value.trim().length === 0) {
-					return 'Search query is required';
-				}
-				if (value.trim().length > 500) {
-					return 'Search query must be 500 characters or less';
-				}
-				return null;
+		const quickPick = vscode.window.createQuickPick();
+		quickPick.placeholder = 'Type to search tasks...';
+		quickPick.matchOnDescription = true;
+		quickPick.matchOnDetail = true;
+
+		// Add back to tree view option
+		const backItem: vscode.QuickPickItem = {
+			label: '$(arrow-left) Back to projects',
+			description: 'Return to project tree view',
+			alwaysShow: true
+		};
+
+		quickPick.items = [backItem];
+
+		let searchTimeout: NodeJS.Timeout | undefined;
+
+		// Handle real-time search as user types
+		quickPick.onDidChangeValue(async (value) => {
+			// Clear previous timeout
+			if (searchTimeout) {
+				clearTimeout(searchTimeout);
 			}
+
+			// Debounce search to avoid too many requests
+			searchTimeout = setTimeout(async () => {
+				if (value.trim().length === 0) {
+					// Show only back option when empty
+					quickPick.items = [backItem];
+					return;
+				}
+
+				if (value.trim().length < 2) {
+					// Require at least 2 characters
+					quickPick.items = [
+						backItem,
+						{
+							label: '$(info) Type at least 2 characters to search',
+							description: '',
+							detail: ''
+						}
+					];
+					return;
+				}
+
+				try {
+					const results = await taskService.searchTasks({
+						query: value.trim(),
+						limit: 50
+					});
+
+					const items: vscode.QuickPickItem[] = [backItem];
+
+					if (results.length === 0) {
+						items.push({
+							label: '$(search) No tasks found',
+							description: `No results for "${value.trim()}"`,
+							detail: 'Try different keywords'
+						});
+					} else {
+						items.push(...results.map(result => ({
+							label: `$(${result.task.completed ? 'check' : 'circle-outline'}) ${result.task.name}`,
+							description: result.projectName,
+							detail: `${result.task.details} (${Math.round(result.score * 100)}% match)`,
+							task: result.task // Store task data for selection
+						} as vscode.QuickPickItem & { task: Task })));
+					}
+
+					quickPick.items = items;
+				} catch (error) {
+					quickPick.items = [
+						backItem,
+						{
+							label: '$(error) Search failed',
+							description: `Error: ${error}`,
+							detail: 'Please try again'
+						}
+					];
+				}
+			}, 300); // 300ms debounce
 		});
 
-		if (!query) return;
+		// Handle item selection
+		quickPick.onDidAccept(async () => {
+			const selected = quickPick.selectedItems[0] as vscode.QuickPickItem & { task?: Task };
 
-		const results = await taskService.searchTasks({
-			query: query.trim(),
-			limit: 50
+			if (selected.label.includes('Back to projects')) {
+				// Return to normal tree view
+				taskTreeProvider.clearSearch();
+			} else if (selected.task) {
+				// Open task in editor
+				const taskEditor = new TaskEditor(extensionUri, taskService);
+				await taskEditor.show({
+					mode: 'edit',
+					task: selected.task
+				});
+			}
+
+			quickPick.dispose();
 		});
 
-		taskTreeProvider.setSearchResults(results);
+		// Handle cancellation
+		quickPick.onDidHide(() => {
+			quickPick.dispose();
+		});
 
-		if (results.length === 0) {
-			vscode.window.showInformationMessage('No tasks found matching your search.');
-		} else {
-			vscode.window.showInformationMessage(`Found ${results.length} matching tasks.`);
-		}
+		quickPick.show();
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to search tasks: ${error}`);
+		vscode.window.showErrorMessage(`Failed to open task search: ${error}`);
 	}
 }
 
