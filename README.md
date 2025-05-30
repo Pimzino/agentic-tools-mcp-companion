@@ -45,21 +45,20 @@ This VS Code extension is part of a complete task and memory management ecosyste
 
 ## Installation
 
-### Prerequisites
-Before installing this extension, you may want to install the companion MCP server for AI assistant integration:
-
-```bash
-# Install the MCP server (optional but recommended)
-npm install -g @pimzino/agentic-tools-mcp
-```
-
 ### Extension Installation
+1. Open VS Code
+2. Go to Extensions view (Ctrl+Shift+X)
+3. Search for "Agentic Tools MCP Companion"
+4. Click "Install"
+5. Open a workspace folder
+6. The "Agentic Tools" sidebar will appear in the Activity Bar
+
+### Development Installation (for contributors only)
 1. Clone or download this extension repository
 2. Open the extension folder in VS Code
 3. Run `npm install` to install dependencies
 4. Press `F5` to run the extension in a new Extension Development Host window
 5. Open a workspace folder in the new window
-6. The "Agentic Tools" sidebar will appear in the Activity Bar
 
 ### Complete Setup (MCP Server + Extension)
 For the full experience with AI assistant integration:
@@ -235,3 +234,4 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 **Enjoy managing your tasks and memories with Agentic Tools MCP Companion!**
 
 *Part of the [Agentic Tools ecosystem](https://github.com/Pimzino/agentic-tools-mcp) - bringing AI-powered task and memory management to your workflow.*
+
