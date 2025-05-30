@@ -3,6 +3,7 @@
   "displayName": "Agentic Tools MCP Companion",
   "description": "Companion extension to the MCP server @pimzino/agentic-tools-mcp",
   "version": "0.0.1",
+  "publisher": "Pimzino",
   "engines": {
     "vscode": "^1.100.0"
   },
