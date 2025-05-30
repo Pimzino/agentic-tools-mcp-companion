@@ -1,6 +1,20 @@
 # Agentic Tools MCP Companion
 
-A VSCode extension that provides a GUI interface for the [agentic-tools-mcp](https://github.com/Pimzino/agentic-tools-mcp) server functionality. This extension allows you to manage tasks and memories directly from VSCode with a beautiful, intuitive interface.
+[![GitHub stars](https://img.shields.io/github/stars/Pimzino/agentic-tools-mcp-companion.svg)](https://github.com/Pimzino/agentic-tools-mcp-companion/stargazers)
+[![GitHub license](https://img.shields.io/github/license/Pimzino/agentic-tools-mcp-companion.svg)](https://github.com/Pimzino/agentic-tools-mcp-companion/blob/main/LICENSE)
+[![VS Code Version](https://img.shields.io/badge/VS%20Code-1.100.0%2B-blue.svg)](https://code.visualstudio.com/)
+[![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
+
+A beautiful VS Code extension that provides a GUI interface for the [**agentic-tools-mcp**](https://github.com/Pimzino/agentic-tools-mcp) server functionality. This extension allows you to manage tasks and memories directly from VS Code with an intuitive, visual interface.
+
+## 🔗 Ecosystem
+
+This VS Code extension is part of a complete task and memory management ecosystem:
+
+- **🖥️ VS Code Extension** (this repository) - Beautiful GUI interface for managing tasks and memories
+- **⚡ [MCP Server](https://github.com/Pimzino/agentic-tools-mcp)** - Command-line tools and API for AI assistants
+
+> **💡 Pro Tip**: Use both together for the ultimate productivity experience! The MCP server enables AI assistant integration while this extension provides a visual interface.
 
 ## Features
 
@@ -31,11 +45,39 @@ A VSCode extension that provides a GUI interface for the [agentic-tools-mcp](htt
 
 ## Installation
 
-1. Clone or download this extension
-2. Open the extension folder in VSCode
-3. Press `F5` to run the extension in a new Extension Development Host window
-4. Open a workspace folder in the new window
-5. The "Agentic Tools" sidebar will appear in the Activity Bar
+### Prerequisites
+Before installing this extension, you may want to install the companion MCP server for AI assistant integration:
+
+```bash
+# Install the MCP server (optional but recommended)
+npm install -g @pimzino/agentic-tools-mcp
+```
+
+### Extension Installation
+1. Clone or download this extension repository
+2. Open the extension folder in VS Code
+3. Run `npm install` to install dependencies
+4. Press `F5` to run the extension in a new Extension Development Host window
+5. Open a workspace folder in the new window
+6. The "Agentic Tools" sidebar will appear in the Activity Bar
+
+### Complete Setup (MCP Server + Extension)
+For the full experience with AI assistant integration:
+
+1. **Install MCP Server**: `npm install -g @pimzino/agentic-tools-mcp`
+2. **Configure Claude Desktop** (or your preferred MCP client):
+   ```json
+   {
+     "mcpServers": {
+       "agentic-tools": {
+         "command": "npx",
+         "args": ["-y", "@pimzino/agentic-tools-mcp"]
+       }
+     }
+   }
+   ```
+3. **Install this VS Code extension** (follow steps above)
+4. **Enjoy seamless integration** between visual interface and AI assistants!
 
 ## Usage
 
@@ -84,6 +126,45 @@ This extension contributes the following settings:
 - Large datasets may impact performance
 - Memory search is case-sensitive and uses simple text matching
 
+## Architecture & Data Synchronization
+
+This extension is designed to work seamlessly with the [agentic-tools-mcp](https://github.com/Pimzino/agentic-tools-mcp) server:
+
+### Data Compatibility
+- **100% Compatible**: Uses identical `.agentic-tools-mcp` directory structure
+- **Same File Formats**: JSON files are interchangeable between extension and MCP server
+- **Atomic Operations**: Safe file operations prevent data corruption
+- **Real-time Sync**: Changes made in VS Code are immediately available to AI assistants
+
+### Workflow Integration
+1. **Create/Edit in VS Code**: Use the beautiful GUI to manage tasks and memories
+2. **AI Assistant Access**: AI assistants can read and modify the same data via MCP server
+3. **Team Collaboration**: Share data via Git - both tools work with the same files
+4. **Backup & Migration**: Simple file-based storage travels with your projects
+
+### Benefits of Using Both Tools
+- 🎯 **Visual Management**: Rich GUI for complex task hierarchies
+- 🤖 **AI Integration**: Let AI assistants help with task planning and memory management
+- 👥 **Team Collaboration**: Share task lists and memories via version control
+- 📁 **Project-Specific**: Each workspace has its own isolated data
+- 🔄 **Bidirectional Sync**: Changes in either tool are reflected in the other
+
+## Related Projects
+
+### ⚡ MCP Server
+**[Agentic Tools MCP Server](https://github.com/Pimzino/agentic-tools-mcp)** - The companion MCP server that enables AI assistant integration.
+
+**Key Features:**
+- 🔧 **MCP Tools**: Complete set of task and memory management tools for AI assistants
+- 📦 **NPM Package**: Easy installation with `npm install -g @pimzino/agentic-tools-mcp`
+- 🤖 **AI Assistant Support**: Works with Claude Desktop, AugmentCode, and other MCP clients
+- 🔄 **Data Compatibility**: 100% compatible with this VS Code extension
+
+**Perfect for:**
+- AI assistant users who want task and memory management
+- Developers who prefer command-line tools
+- Anyone who wants to integrate task management into AI workflows
+
 ## Development
 
 To contribute to this extension:
@@ -92,6 +173,26 @@ To contribute to this extension:
 2. Run `npm install` to install dependencies
 3. Press `F5` to run in development mode
 4. Make changes and test in the Extension Development Host
+
+### Development with MCP Server
+For testing the complete ecosystem:
+
+1. Clone both repositories:
+   ```bash
+   git clone https://github.com/Pimzino/agentic-tools-mcp.git
+   git clone https://github.com/Pimzino/agentic-tools-mcp-companion.git
+   ```
+2. Set up the MCP server:
+   ```bash
+   cd agentic-tools-mcp
+   npm install && npm run build
+   ```
+3. Set up the VS Code extension:
+   ```bash
+   cd agentic-tools-mcp-companion
+   npm install
+   ```
+4. Test both tools with the same workspace data
 
 ## Release Notes
 
@@ -103,8 +204,34 @@ Initial release with comprehensive functionality:
 - **Complete CRUD Operations**: Create, read, update, delete for all entities
 - **Text-based Search**: Relevance-scored memory search functionality
 - **Context Menus**: Right-click actions for all operations
-- **Data Compatibility**: 100% compatible with agentic-tools-mcp server v1.4.0+
+- **Data Compatibility**: 100% compatible with agentic-tools-mcp server v1.5.0+
+
+## Support
+
+For issues and questions, please use the GitHub issue tracker.
+
+### Getting Help
+- 🐛 **Extension Issues**: Report VS Code extension issues at [this repository](https://github.com/Pimzino/agentic-tools-mcp-companion/issues)
+- ⚡ **MCP Server Issues**: Report MCP server issues at [agentic-tools-mcp](https://github.com/Pimzino/agentic-tools-mcp/issues)
+- 💡 **Feature Requests**: Use GitHub discussions for feature requests
+- 📖 **Documentation**: Check the [MCP server documentation](https://github.com/Pimzino/agentic-tools-mcp#documentation) for detailed API reference
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
-**Enjoy managing your tasks with Agentic Tools MCP Companion!**
+**Enjoy managing your tasks and memories with Agentic Tools MCP Companion!**
+
+*Part of the [Agentic Tools ecosystem](https://github.com/Pimzino/agentic-tools-mcp) - bringing AI-powered task and memory management to your workflow.*

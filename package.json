@@ -9,6 +9,15 @@
   "categories": [
     "Other"
   ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Pimzino/agentic-tools-mcp-companion.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Pimzino/agentic-tools-mcp-companion/issues"
+  },
+  "homepage": "https://github.com/Pimzino/agentic-tools-mcp-companion#readme",
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
