@@ -2,7 +2,7 @@
   "name": "agentic-tools-mcp-companion",
   "displayName": "Agentic Tools MCP Companion",
   "description": "Companion extension to the MCP server @pimzino/agentic-tools-mcp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "Pimzino",
   "engines": {
     "vscode": "^1.100.0"
@@ -232,6 +232,58 @@
           "group": "inline"
         }
       ]
+    },
+    "configuration": {
+      "title": "Agentic Tools MCP Companion",
+      "properties": {
+        "agenticTools.search.pageSize": {
+          "type": "number",
+          "default": 20,
+          "minimum": 5,
+          "maximum": 100,
+          "description": "Number of search results to display per page"
+        },
+        "agenticTools.search.maxResults": {
+          "type": "number",
+          "default": 200,
+          "minimum": 10,
+          "maximum": 1000,
+          "description": "Maximum number of search results to return"
+        },
+        "agenticTools.search.debounceMs": {
+          "type": "number",
+          "default": 300,
+          "minimum": 100,
+          "maximum": 1000,
+          "description": "Debounce delay in milliseconds for search input"
+        },
+        "agenticTools.search.threshold": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0.1,
+          "maximum": 1.0,
+          "description": "Minimum relevance score threshold for search results"
+        },
+        "agenticTools.fileWatching.debounceMs": {
+          "type": "number",
+          "default": 500,
+          "minimum": 100,
+          "maximum": 2000,
+          "description": "Debounce delay in milliseconds for file change events"
+        },
+        "agenticTools.performance.enableEarlyTermination": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable early termination for low-scoring search results to improve performance"
+        },
+        "agenticTools.performance.lowScoreThreshold": {
+          "type": "number",
+          "default": 0.1,
+          "minimum": 0.01,
+          "maximum": 0.5,
+          "description": "Threshold below which search results are terminated early"
+        }
+      }
     }
   },
   "scripts": {

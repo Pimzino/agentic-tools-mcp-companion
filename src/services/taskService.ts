@@ -12,11 +12,15 @@ import {
   StorageData
 } from '../models/index';
 import { WorkspaceUtils, FileUtils } from '../utils/index';
+import { ConfigUtils, CancellableOperation, PaginatedSearchResult, debounce } from '../utils/configUtils';
 
 export interface SearchTaskInput {
   query: string;
   limit?: number;
   threshold?: number;
+  page?: number;
+  pageSize?: number;
+  signal?: AbortSignal;
 }
 
 export interface TaskSearchResult {
@@ -24,6 +28,8 @@ export interface TaskSearchResult {
   score: number;
   projectName: string;
 }
+
+export interface PaginatedTaskSearchResult extends PaginatedSearchResult<TaskSearchResult> {}
 
 /**
  * Service class for task management operations
@@ -33,6 +39,7 @@ export class TaskService {
   private static instance: TaskService;
   private fileWatcher: { dispose: () => void } | null = null;
   private onDataChangedEmitter = new vscode.EventEmitter<void>();
+  private debouncedDataChanged: () => void;
 
   /**
    * Event fired when task data changes
@@ -40,6 +47,11 @@ export class TaskService {
   public readonly onDataChanged = this.onDataChangedEmitter.event;
 
   private constructor() {
+    const config = ConfigUtils.getConfig();
+    this.debouncedDataChanged = debounce(() => {
+      this.onDataChangedEmitter.fire();
+    }, config.fileWatching.debounceMs);
+
     this.setupFileWatcher();
   }
 
@@ -60,7 +72,7 @@ export class TaskService {
     const tasksFilePath = WorkspaceUtils.getTasksFilePath();
     if (tasksFilePath) {
       this.fileWatcher = FileUtils.watchFile(tasksFilePath, () => {
-        this.onDataChangedEmitter.fire();
+        this.debouncedDataChanged();
       });
     }
   }
@@ -99,7 +111,7 @@ export class TaskService {
     }
 
     await FileUtils.writeTasksFile(tasksFilePath, data);
-    this.onDataChangedEmitter.fire();
+    this.debouncedDataChanged();
   }
 
   // Project operations
@@ -404,19 +416,36 @@ export class TaskService {
   }
 
   /**
-   * Search tasks using text-based matching
+   * Search tasks using text-based matching with pagination support
    */
   async searchTasks(input: SearchTaskInput): Promise<TaskSearchResult[]> {
+    const config = ConfigUtils.getConfig();
     const data = await this.loadData();
     const query = input.query.toLowerCase();
     const results: TaskSearchResult[] = [];
+    const threshold = input.threshold ?? config.search.threshold;
+    const maxResults = input.limit ?? config.search.maxResults;
+
+    // Check for cancellation
+    if (input.signal?.aborted) {
+      throw new Error('Search operation was cancelled');
+    }
 
     // Create a map of project names for quick lookup
     const projectMap = new Map(data.projects.map(p => [p.id, p.name]));
 
     for (const task of data.tasks) {
-      const score = this.calculateTaskRelevanceScore(task, query);
-      const threshold = input.threshold || 0.3;
+      // Check for cancellation during processing
+      if (input.signal?.aborted) {
+        throw new Error('Search operation was cancelled');
+      }
+
+      const score = this.calculateTaskRelevanceScore(task, query, config.performance);
+
+      // Early termination for very low scores
+      if (config.performance.enableEarlyTermination && score < config.performance.lowScoreThreshold) {
+        continue;
+      }
 
       if (score >= threshold) {
         const projectName = projectMap.get(task.projectId) || 'Unknown Project';
@@ -425,26 +454,53 @@ export class TaskService {
           score,
           projectName
         });
+
+        // Stop if we've reached max results to prevent excessive processing
+        if (results.length >= maxResults) {
+          break;
+        }
       }
     }
 
-    // Sort by score (highest first) and apply limit
+    // Sort by score (highest first)
     results.sort((a, b) => b.score - a.score);
-    const limit = input.limit || 50;
-    return results.slice(0, limit);
+
+    // Apply final limit
+    return results.slice(0, maxResults);
   }
 
   /**
-   * Calculate relevance score for task search
+   * Search tasks with pagination support
    */
-  private calculateTaskRelevanceScore(task: Task, query: string): number {
+  async searchTasksPaginated(input: SearchTaskInput): Promise<PaginatedTaskSearchResult> {
+    const config = ConfigUtils.getConfig();
+    const pageSize = input.pageSize ?? config.search.pageSize;
+    const page = input.page ?? 1;
+
+    // Get all search results first
+    const allResults = await this.searchTasks(input);
+
+    // Apply pagination
+    return ConfigUtils.paginateResults(allResults, page, pageSize);
+  }
+
+  /**
+   * Calculate relevance score for task search with performance optimizations
+   */
+  private calculateTaskRelevanceScore(
+    task: Task,
+    query: string,
+    performanceConfig?: { enableEarlyTermination: boolean; lowScoreThreshold: number }
+  ): number {
     const name = task.name.toLowerCase();
     const details = task.details.toLowerCase();
     let score = 0;
 
-    // Name matches (higher weight)
+    // Name matches (higher weight) - prioritize exact matches
     if (name.includes(query)) {
-      if (name.startsWith(query)) {
+      if (name === query) {
+        score += 1.0; // Exact match
+      } else if (name.startsWith(query)) {
         score += 0.8; // Name starts with query
       } else if (name.endsWith(query)) {
         score += 0.6; // Name ends with query
@@ -453,13 +509,28 @@ export class TaskService {
       }
     }
 
-    // Details matches (lower weight)
-    if (details.includes(query)) {
+    // Early termination if enabled and score is already very low
+    if (performanceConfig?.enableEarlyTermination && score < performanceConfig.lowScoreThreshold) {
+      return score;
+    }
+
+    // Details matches (lower weight) - only process if we haven't found a good name match
+    if (score < 0.8 && details.includes(query)) {
       const detailsWords = details.split(/\s+/);
       const queryWords = query.split(/\s+/);
-      const matchingWords = queryWords.filter(word => details.includes(word));
-      const matchRatio = matchingWords.length / queryWords.length;
-      score += matchRatio * 0.3;
+
+      // Optimize by checking word boundaries for better matching
+      let wordMatches = 0;
+      for (const queryWord of queryWords) {
+        if (details.includes(queryWord)) {
+          wordMatches++;
+        }
+      }
+
+      if (wordMatches > 0) {
+        const matchRatio = wordMatches / queryWords.length;
+        score += matchRatio * 0.3;
+      }
     }
 
     return Math.min(score, 1.0); // Cap at 1.0

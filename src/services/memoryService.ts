@@ -12,6 +12,8 @@ import {
   MEMORY_CONSTANTS
 } from '../models/index';
 import { WorkspaceUtils, FileUtils } from '../utils/index';
+import { ErrorUtils, ServiceError, FileOperationError, WorkspaceError } from '../utils/errorHandler';
+import { ConfigUtils, CancellableOperation, PaginatedSearchResult, debounce } from '../utils/configUtils';
 
 /**
  * JSON file structure for memory storage
@@ -26,12 +28,27 @@ interface MemoryJsonFile {
 }
 
 /**
+ * Extended search input with pagination support
+ */
+interface ExtendedSearchMemoryInput extends SearchMemoryInput {
+  page?: number;
+  pageSize?: number;
+  signal?: AbortSignal;
+}
+
+/**
+ * Paginated memory search result
+ */
+interface PaginatedMemorySearchResult extends PaginatedSearchResult<MemorySearchResult> {}
+
+/**
  * Service class for memory management operations
  * Handles all CRUD operations for memories with JSON file storage
  */
 export class MemoryService {
   private static instance: MemoryService;
   private onDataChangedEmitter = new vscode.EventEmitter<void>();
+  private debouncedDataChanged: () => void;
   private config: MemoryConfig;
   private workingDirectory: string | null = null;
   private storageDir: string | null = null;
@@ -45,6 +62,10 @@ export class MemoryService {
 
   private constructor() {
     this.config = DEFAULT_MEMORY_CONFIG;
+    const config = ConfigUtils.getConfig();
+    this.debouncedDataChanged = debounce(() => {
+      this.onDataChangedEmitter.fire();
+    }, config.fileWatching.debounceMs);
   }
 
   /**
@@ -87,7 +108,7 @@ export class MemoryService {
 
       this.isInitialized = true;
     } catch (error) {
-      throw new Error(`Failed to initialize memory service: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw ErrorUtils.createServiceError('MemoryService', 'initialize', error);
     }
   }
 
@@ -242,49 +263,93 @@ export class MemoryService {
     // Write to file
     await fs.writeFile(filePath, JSON.stringify(jsonMemory, null, 2), 'utf-8');
 
-    this.onDataChangedEmitter.fire();
+    this.debouncedDataChanged();
     return memory;
   }
 
   /**
-   * Search memories using text-based matching
+   * Search memories using text-based matching with performance optimizations
    */
-  async searchMemories(input: SearchMemoryInput): Promise<MemorySearchResult[]> {
+  async searchMemories(input: ExtendedSearchMemoryInput): Promise<MemorySearchResult[]> {
     await this.initialize();
 
+    const config = ConfigUtils.getConfig();
     const allMemories = await this.getMemories(undefined, input.category);
     const query = input.query.toLowerCase();
     const results: MemorySearchResult[] = [];
+    const threshold = input.threshold ?? config.search.threshold;
+    const maxResults = input.limit ?? config.search.maxResults;
+
+    // Check for cancellation
+    if (input.signal?.aborted) {
+      throw new Error('Search operation was cancelled');
+    }
 
     for (const memory of allMemories) {
-      const score = this.calculateRelevanceScore(memory, query);
-      const threshold = input.threshold || this.config.defaultThreshold;
+      // Check for cancellation during processing
+      if (input.signal?.aborted) {
+        throw new Error('Search operation was cancelled');
+      }
+
+      const score = this.calculateRelevanceScore(memory, query, config.performance);
+
+      // Early termination for very low scores
+      if (config.performance.enableEarlyTermination && score < config.performance.lowScoreThreshold) {
+        continue;
+      }
 
       if (score >= threshold) {
         results.push({
           memory,
           score
         });
+
+        // Stop if we've reached max results to prevent excessive processing
+        if (results.length >= maxResults) {
+          break;
+        }
       }
     }
 
-    // Sort by score (highest first) and apply limit
+    // Sort by score (highest first)
     results.sort((a, b) => b.score - a.score);
-    const limit = input.limit || this.config.defaultLimit;
-    return results.slice(0, limit);
+
+    // Apply final limit
+    return results.slice(0, maxResults);
   }
 
   /**
-   * Calculate relevance score for text-based search
+   * Search memories with pagination support
    */
-  private calculateRelevanceScore(memory: Memory, query: string): number {
+  async searchMemoriesPaginated(input: ExtendedSearchMemoryInput): Promise<PaginatedMemorySearchResult> {
+    const config = ConfigUtils.getConfig();
+    const pageSize = input.pageSize ?? config.search.pageSize;
+    const page = input.page ?? 1;
+
+    // Get all search results first
+    const allResults = await this.searchMemories(input);
+
+    // Apply pagination
+    return ConfigUtils.paginateResults(allResults, page, pageSize);
+  }
+
+  /**
+   * Calculate relevance score for text-based search with performance optimizations
+   */
+  private calculateRelevanceScore(
+    memory: Memory,
+    query: string,
+    performanceConfig?: { enableEarlyTermination: boolean; lowScoreThreshold: number }
+  ): number {
     const title = memory.title.toLowerCase();
     const content = memory.content.toLowerCase();
     let score = 0;
 
-    // Title matches (higher weight)
+    // Title matches (higher weight) - prioritize exact matches
     if (title.includes(query)) {
-      if (title.startsWith(query)) {
+      if (title === query) {
+        score += 1.0; // Exact match
+      } else if (title.startsWith(query)) {
         score += 0.8; // Title starts with query
       } else if (title.endsWith(query)) {
         score += 0.6; // Title ends with query
@@ -293,17 +358,32 @@ export class MemoryService {
       }
     }
 
-    // Content matches (lower weight)
-    if (content.includes(query)) {
-      const contentWords = content.split(/\s+/);
-      const queryWords = query.split(/\s+/);
-      const matchingWords = queryWords.filter(word => content.includes(word));
-      const matchRatio = matchingWords.length / queryWords.length;
-      score += matchRatio * 0.3;
+    // Early termination if enabled and score is already very low
+    if (performanceConfig?.enableEarlyTermination && score < performanceConfig.lowScoreThreshold) {
+      return score;
     }
 
-    // Category bonus (small boost)
-    if (memory.category && memory.category.toLowerCase().includes(query)) {
+    // Content matches (lower weight) - only process if we haven't found a good title match
+    if (score < 0.8 && content.includes(query)) {
+      const contentWords = content.split(/\s+/);
+      const queryWords = query.split(/\s+/);
+
+      // Optimize by checking word boundaries for better matching
+      let wordMatches = 0;
+      for (const queryWord of queryWords) {
+        if (content.includes(queryWord)) {
+          wordMatches++;
+        }
+      }
+
+      if (wordMatches > 0) {
+        const matchRatio = wordMatches / queryWords.length;
+        score += matchRatio * 0.3;
+      }
+    }
+
+    // Category bonus (small boost) - only if we haven't already scored high
+    if (score < 0.9 && memory.category && memory.category.toLowerCase().includes(query)) {
       score += 0.1;
     }
 
@@ -313,7 +393,7 @@ export class MemoryService {
   /**
    * Get all memories with optional filtering
    */
-  async getMemories(agentId?: string, category?: string, limit?: number): Promise<Memory[]> {
+  async getMemories(_agentId?: string, category?: string, limit?: number): Promise<Memory[]> {
     await this.initialize();
     this.ensureInitialized();
 
@@ -413,6 +493,8 @@ export class MemoryService {
         category: jsonMemory.category === MEMORY_CONSTANTS.DEFAULT_CATEGORY ? undefined : jsonMemory.category
       };
     } catch (error) {
+      const serviceError = ErrorUtils.createServiceError('MemoryService', 'getMemory', error);
+      console.error('MemoryService.getMemory: Failed to read memory file:', serviceError.message, { memoryId: id, filePath });
       return null;
     }
   }
@@ -475,9 +557,11 @@ export class MemoryService {
         await fs.writeFile(filePath, JSON.stringify(updatedJsonMemory, null, 2), 'utf-8');
       }
 
-      this.onDataChangedEmitter.fire();
+      this.debouncedDataChanged();
       return updatedMemory;
     } catch (error) {
+      const serviceError = ErrorUtils.createServiceError('MemoryService', 'updateMemory', error);
+      console.error('MemoryService.updateMemory: Failed to update memory:', serviceError.message, { memoryId: id, updates });
       return null;
     }
   }
@@ -495,9 +579,11 @@ export class MemoryService {
 
     try {
       await fs.unlink(filePath);
-      this.onDataChangedEmitter.fire();
+      this.debouncedDataChanged();
       return true;
     } catch (error) {
+      const serviceError = ErrorUtils.createServiceError('MemoryService', 'deleteMemory', error);
+      console.error('MemoryService.deleteMemory: Failed to delete memory file:', serviceError.message, { memoryId: id, filePath });
       return false;
     }
   }

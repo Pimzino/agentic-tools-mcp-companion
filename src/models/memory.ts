@@ -1,4 +1,20 @@
 /**
+ * Memory metadata structure for type-safe metadata handling
+ */
+export interface MemoryMetadata {
+  /** Source of the memory (e.g., 'user_input', 'conversation', 'file') */
+  source?: string;
+  /** Priority level (1-5, where 5 is highest) */
+  priority?: number;
+  /** Tags for categorization */
+  tags?: string[];
+  /** Related memory IDs */
+  relatedMemories?: string[];
+  /** Custom key-value pairs for extensibility */
+  [key: string]: string | number | boolean | string[] | undefined;
+}
+
+/**
  * Memory data model for the agent memories system
  * This interface matches exactly with the MCP server implementation
  */
@@ -9,8 +25,8 @@ export interface Memory {
   title: string;
   /** Detailed memory content/text (no limit) */
   content: string;
-  /** Flexible metadata object for additional information */
-  metadata: Record<string, any>;
+  /** Structured metadata object for additional information */
+  metadata: MemoryMetadata;
   /** Timestamp when the memory was created */
   createdAt: string;
   /** Timestamp when the memory was last updated */
@@ -27,8 +43,8 @@ export interface CreateMemoryInput {
   title: string;
   /** Detailed memory content/text (no limit) */
   content: string;
-  /** Flexible metadata object for additional information */
-  metadata?: Record<string, any>;
+  /** Structured metadata object for additional information */
+  metadata?: MemoryMetadata;
   /** Optional categorization of the memory */
   category?: string;
 }
@@ -41,8 +57,8 @@ export interface UpdateMemoryInput {
   title?: string;
   /** Detailed memory content/text (no limit) (optional) */
   content?: string;
-  /** Flexible metadata object for additional information (optional) */
-  metadata?: Record<string, any>;
+  /** Structured metadata object for additional information (optional) */
+  metadata?: MemoryMetadata;
   /** Optional categorization of the memory */
   category?: string;
 }

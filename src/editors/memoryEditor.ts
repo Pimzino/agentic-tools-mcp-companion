@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { Memory, CreateMemoryInput, UpdateMemoryInput, MEMORY_CONSTANTS } from '../models/memory';
 import { MemoryService } from '../services/memoryService';
 import { WebviewUtils } from './webviewUtils';
+import { MemoryFormData, FormValidationResult } from '../types/formTypes';
+import { ErrorHandler, ErrorUtils, ServiceError, ValidationError } from '../utils/errorHandler';
 
 export interface MemoryEditorData {
   mode: 'create' | 'edit';
@@ -37,6 +39,9 @@ export class MemoryEditor {
         });
         data.existingCategories = Array.from(categories).sort();
       } catch (error) {
+        // Log error but don't fail - this is just for category suggestions
+        const serviceError = ErrorUtils.createServiceError('MemoryService', 'getMemories', error);
+        console.error('MemoryEditor: Failed to load existing categories for suggestions:', serviceError.message);
         data.existingCategories = [];
       }
     }
@@ -92,7 +97,7 @@ export class MemoryEditor {
   /**
    * Handle save action from webview
    */
-  private async handleSave(formData: any, editorData: MemoryEditorData): Promise<void> {
+  private async handleSave(formData: MemoryFormData, editorData: MemoryEditorData): Promise<void> {
     try {
       // Validate the form data
       const validation = this.validateFormData(formData);
@@ -134,14 +139,19 @@ export class MemoryEditor {
       // Close the editor
       this.dispose();
     } catch (error) {
-      vscode.window.showErrorMessage(`Failed to save memory: ${error}`);
+      const serviceError = ErrorUtils.createServiceError('MemoryEditor', 'handleSave', error);
+      ErrorHandler.handleError(serviceError, ErrorHandler.createContext('memory_editor_save', {
+        mode: editorData.mode,
+        memoryId: editorData.memory?.id,
+        memoryTitle: formData.title
+      }));
     }
   }
 
   /**
    * Validate form data
    */
-  private validateFormData(data: any): { isValid: boolean; error?: string } {
+  private validateFormData(data: MemoryFormData): FormValidationResult {
     if (!data.title || data.title.trim().length === 0) {
       return { isValid: false, error: 'Memory title is required' };
     }
@@ -183,7 +193,7 @@ export class MemoryEditor {
         <title>${title}</title>
         <style>
           ${WebviewUtils.getCommonCSS()}
-          
+
           .memory-info {
             background-color: var(--vscode-editor-inactiveSelectionBackground);
             padding: 12px;
@@ -192,11 +202,11 @@ export class MemoryEditor {
             font-size: 0.9em;
             color: var(--vscode-descriptionForeground);
           }
-          
+
           .category-suggestions {
             margin-top: 8px;
           }
-          
+
           .category-suggestions-label {
             font-size: 0.9em;
             color: var(--vscode-descriptionForeground);
@@ -207,21 +217,21 @@ export class MemoryEditor {
       <body>
         <div class="form-container">
           <h1>${title}</h1>
-          
+
           ${isEdit && memory ? `
             <div class="memory-info">
               <strong>Created:</strong> ${new Date(memory.createdAt).toLocaleString()}<br>
               <strong>Last Updated:</strong> ${new Date(memory.updatedAt).toLocaleString()}
             </div>
           ` : ''}
-          
+
           <form id="memoryForm">
             <div class="form-group">
               <label for="memoryTitle">Memory Title *</label>
-              <input 
-                type="text" 
-                id="memoryTitle" 
-                name="title" 
+              <input
+                type="text"
+                id="memoryTitle"
+                name="title"
                 placeholder="Short descriptive title"
                 value="${memory?.title || ''}"
                 maxlength="${MEMORY_CONSTANTS.MAX_TITLE_LENGTH}"
@@ -230,12 +240,12 @@ export class MemoryEditor {
               <div class="char-counter" id="titleCounter">0/${MEMORY_CONSTANTS.MAX_TITLE_LENGTH}</div>
               <div class="error-message"></div>
             </div>
-            
+
             <div class="form-group">
               <label for="memoryContent">Memory Content *</label>
-              <textarea 
-                id="memoryContent" 
-                name="content" 
+              <textarea
+                id="memoryContent"
+                name="content"
                 class="textarea-large"
                 placeholder="Enter detailed memory content..."
                 maxlength="10000"
@@ -244,13 +254,13 @@ export class MemoryEditor {
               <div class="char-counter" id="contentCounter">0/10000</div>
               <div class="error-message"></div>
             </div>
-            
+
             <div class="form-group">
               <label for="memoryCategory">Category (optional)</label>
-              <input 
-                type="text" 
-                id="memoryCategory" 
-                name="category" 
+              <input
+                type="text"
+                id="memoryCategory"
+                name="category"
                 placeholder="e.g., user_preferences, project_context"
                 value="${memory?.category || ''}"
                 maxlength="100"
@@ -264,7 +274,7 @@ export class MemoryEditor {
               ` : ''}
               <div class="error-message"></div>
             </div>
-            
+
             <div class="button-group">
               <button type="button" class="btn-secondary" id="cancelBtn">Cancel</button>
               <button type="submit" class="btn-primary" id="saveBtn">
@@ -273,45 +283,45 @@ export class MemoryEditor {
             </div>
           </form>
         </div>
-        
+
         <script>
           ${WebviewUtils.getCommonJS()}
-          
+
           // Initialize form
           function initializeForm(data) {
             setupCharCounter('memoryTitle', ${MEMORY_CONSTANTS.MAX_TITLE_LENGTH}, 'titleCounter');
             setupCharCounter('memoryContent', 10000, 'contentCounter');
             setupCharCounter('memoryCategory', 100, 'categoryCounter');
-            
+
             // Setup category suggestions
             const categories = ${JSON.stringify(categories)};
             if (categories.length > 0) {
               setupSuggestionChips('memoryCategory', categories);
             }
           }
-          
+
           // Form submission
           document.getElementById('memoryForm').addEventListener('submit', (e) => {
             e.preventDefault();
-            
+
             const formData = new FormData(e.target);
             const data = {
               title: formData.get('title'),
               content: formData.get('content'),
               category: formData.get('category') || ''
             };
-            
+
             // Validate
             let isValid = true;
             isValid &= validateField('memoryTitle', (value) => value.trim().length > 0 && value.trim().length <= ${MEMORY_CONSTANTS.MAX_TITLE_LENGTH}, 'Memory title is required and must be ${MEMORY_CONSTANTS.MAX_TITLE_LENGTH} characters or less');
             isValid &= validateField('memoryContent', (value) => value.trim().length > 0 && value.trim().length <= 10000, 'Memory content is required and must be 10,000 characters or less');
             isValid &= validateField('memoryCategory', (value) => !value || value.length <= 100, 'Category must be 100 characters or less');
-            
+
             if (isValid) {
               vscode.postMessage({ type: 'save', data });
             }
           });
-          
+
           // Cancel button
           document.getElementById('cancelBtn').addEventListener('click', () => {
             vscode.postMessage({ type: 'cancel' });
@@ -328,7 +338,7 @@ export class MemoryEditor {
   public dispose(): void {
     this.panel?.dispose();
     this.panel = undefined;
-    
+
     while (this.disposables.length) {
       const disposable = this.disposables.pop();
       if (disposable) {

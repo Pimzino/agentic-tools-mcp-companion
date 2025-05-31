@@ -4,27 +4,34 @@ import { TaskService } from '../services/taskService';
 import { Project, Task, Subtask } from '../models/index';
 import { TaskEditor, TaskEditorData } from '../editors/taskEditor';
 import { SubtaskEditor, SubtaskEditorData } from '../editors/subtaskEditor';
+import { isTaskSearchResult } from '../types/formTypes';
+import { ErrorHandler, ErrorUtils, ServiceError } from '../utils/errorHandler';
+import { ConfigUtils, CancellableOperation } from '../utils/configUtils';
 
 /**
  * Delete a project
  */
 export async function deleteProject(taskService: TaskService, item: TaskTreeItem): Promise<void> {
-	if (item.type !== 'project') return;
+	if (item.type !== 'project') {return;}
 
+	const project = item.data as Project;
 	try {
-		const project = item.data as Project;
 		const confirmation = await vscode.window.showWarningMessage(
 			`Are you sure you want to delete project "${project.name}"? This will also delete all tasks and subtasks in this project.`,
 			{ modal: true },
 			'Delete'
 		);
 
-		if (confirmation !== 'Delete') return;
+		if (confirmation !== 'Delete') {return;}
 
 		await taskService.deleteProject(project.id);
 		vscode.window.showInformationMessage(`Project "${project.name}" deleted successfully!`);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to delete project: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'deleteProject', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('delete_project', {
+			projectId: project.id,
+			projectName: project.name
+		}));
 	}
 }
 
@@ -32,10 +39,10 @@ export async function deleteProject(taskService: TaskService, item: TaskTreeItem
  * Create a new task using the rich editor interface
  */
 export async function createTask(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
-	if (item.type !== 'project') return;
+	if (item.type !== 'project') {return;}
 
+	const project = item.data as Project;
 	try {
-		const project = item.data as Project;
 		const taskEditor = new TaskEditor(extensionUri, taskService);
 
 		const editorData: TaskEditorData = {
@@ -46,7 +53,11 @@ export async function createTask(taskService: TaskService, item: TaskTreeItem, e
 
 		await taskEditor.show(editorData);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to open task editor: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('TaskEditor', 'show', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('create_task_editor', {
+			projectId: project.id,
+			projectName: project.name
+		}));
 	}
 }
 
@@ -54,20 +65,19 @@ export async function createTask(taskService: TaskService, item: TaskTreeItem, e
  * Edit a task using the rich editor interface
  */
 export async function editTask(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
-	if (item.type !== 'task') return;
+	if (item.type !== 'task') {return;}
+
+	// Handle both regular tasks and search result tasks
+	let task: Task;
+	if (isTaskSearchResult(item.data)) {
+		// Search result task
+		task = item.data.task;
+	} else {
+		// Regular task
+		task = item.data as Task;
+	}
 
 	try {
-		// Handle both regular tasks and search result tasks
-		let task: Task;
-		if ('projectName' in (item.data as any)) {
-			// Search result task
-			const searchResult = item.data as any;
-			task = searchResult.task;
-		} else {
-			// Regular task
-			task = item.data as Task;
-		}
-
 		const taskEditor = new TaskEditor(extensionUri, taskService);
 
 		const editorData: TaskEditorData = {
@@ -77,7 +87,11 @@ export async function editTask(taskService: TaskService, item: TaskTreeItem, ext
 
 		await taskEditor.show(editorData);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to open task editor: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('TaskEditor', 'show', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('edit_task_editor', {
+			taskId: task.id,
+			taskName: task.name
+		}));
 	}
 }
 
@@ -85,12 +99,12 @@ export async function editTask(taskService: TaskService, item: TaskTreeItem, ext
  * Toggle task completion
  */
 export async function toggleTask(taskService: TaskService, item: TaskTreeItem): Promise<void> {
-	if (item.type !== 'task') return;
+	if (item.type !== 'task') {return;}
+
+	const task = item.data as Task;
+	const newStatus = !task.completed;
 
 	try {
-		const task = item.data as Task;
-		const newStatus = !task.completed;
-
 		await taskService.updateTask(task.id, {
 			completed: newStatus
 		});
@@ -98,7 +112,12 @@ export async function toggleTask(taskService: TaskService, item: TaskTreeItem): 
 		const statusText = newStatus ? 'completed' : 'pending';
 		vscode.window.showInformationMessage(`Task "${task.name}" marked as ${statusText}!`);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to update task: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'updateTask', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('toggle_task', {
+			taskId: task.id,
+			taskName: task.name,
+			newStatus
+		}));
 	}
 }
 
@@ -106,22 +125,26 @@ export async function toggleTask(taskService: TaskService, item: TaskTreeItem): 
  * Delete a task
  */
 export async function deleteTask(taskService: TaskService, item: TaskTreeItem): Promise<void> {
-	if (item.type !== 'task') return;
+	if (item.type !== 'task') {return;}
 
+	const task = item.data as Task;
 	try {
-		const task = item.data as Task;
 		const confirmation = await vscode.window.showWarningMessage(
 			`Are you sure you want to delete task "${task.name}"? This will also delete all subtasks.`,
 			{ modal: true },
 			'Delete'
 		);
 
-		if (confirmation !== 'Delete') return;
+		if (confirmation !== 'Delete') {return;}
 
 		await taskService.deleteTask(task.id);
 		vscode.window.showInformationMessage(`Task "${task.name}" deleted successfully!`);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to delete task: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'deleteTask', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('delete_task', {
+			taskId: task.id,
+			taskName: task.name
+		}));
 	}
 }
 
@@ -129,10 +152,10 @@ export async function deleteTask(taskService: TaskService, item: TaskTreeItem): 
  * Create a new subtask using the rich editor interface
  */
 export async function createSubtask(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
-	if (item.type !== 'task') return;
+	if (item.type !== 'task') {return;}
 
+	const task = item.data as Task;
 	try {
-		const task = item.data as Task;
 		const subtaskEditor = new SubtaskEditor(extensionUri, taskService);
 
 		const editorData: SubtaskEditorData = {
@@ -143,7 +166,11 @@ export async function createSubtask(taskService: TaskService, item: TaskTreeItem
 
 		await subtaskEditor.show(editorData);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to open subtask editor: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('SubtaskEditor', 'show', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('create_subtask_editor', {
+			taskId: task.id,
+			taskName: task.name
+		}));
 	}
 }
 
@@ -151,10 +178,10 @@ export async function createSubtask(taskService: TaskService, item: TaskTreeItem
  * Edit a subtask using the rich editor interface
  */
 export async function editSubtask(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
-	if (item.type !== 'subtask') return;
+	if (item.type !== 'subtask') {return;}
 
+	const subtask = item.data as Subtask;
 	try {
-		const subtask = item.data as Subtask;
 		const subtaskEditor = new SubtaskEditor(extensionUri, taskService);
 
 		const editorData: SubtaskEditorData = {
@@ -164,7 +191,11 @@ export async function editSubtask(taskService: TaskService, item: TaskTreeItem, 
 
 		await subtaskEditor.show(editorData);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to open subtask editor: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('SubtaskEditor', 'show', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('edit_subtask_editor', {
+			subtaskId: subtask.id,
+			subtaskName: subtask.name
+		}));
 	}
 }
 
@@ -172,12 +203,12 @@ export async function editSubtask(taskService: TaskService, item: TaskTreeItem, 
  * Toggle subtask completion
  */
 export async function toggleSubtask(taskService: TaskService, item: TaskTreeItem): Promise<void> {
-	if (item.type !== 'subtask') return;
+	if (item.type !== 'subtask') {return;}
+
+	const subtask = item.data as Subtask;
+	const newStatus = !subtask.completed;
 
 	try {
-		const subtask = item.data as Subtask;
-		const newStatus = !subtask.completed;
-
 		await taskService.updateSubtask(subtask.id, {
 			completed: newStatus
 		});
@@ -185,7 +216,12 @@ export async function toggleSubtask(taskService: TaskService, item: TaskTreeItem
 		const statusText = newStatus ? 'completed' : 'pending';
 		vscode.window.showInformationMessage(`Subtask "${subtask.name}" marked as ${statusText}!`);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to update subtask: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'updateSubtask', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('toggle_subtask', {
+			subtaskId: subtask.id,
+			subtaskName: subtask.name,
+			newStatus
+		}));
 	}
 }
 
@@ -193,30 +229,35 @@ export async function toggleSubtask(taskService: TaskService, item: TaskTreeItem
  * Delete a subtask
  */
 export async function deleteSubtask(taskService: TaskService, item: TaskTreeItem): Promise<void> {
-	if (item.type !== 'subtask') return;
+	if (item.type !== 'subtask') {return;}
 
+	const subtask = item.data as Subtask;
 	try {
-		const subtask = item.data as Subtask;
 		const confirmation = await vscode.window.showWarningMessage(
 			`Are you sure you want to delete subtask "${subtask.name}"?`,
 			{ modal: true },
 			'Delete'
 		);
 
-		if (confirmation !== 'Delete') return;
+		if (confirmation !== 'Delete') {return;}
 
 		await taskService.deleteSubtask(subtask.id);
 		vscode.window.showInformationMessage(`Subtask "${subtask.name}" deleted successfully!`);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to delete subtask: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'deleteSubtask', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('delete_subtask', {
+			subtaskId: subtask.id,
+			subtaskName: subtask.name
+		}));
 	}
 }
 
 /**
- * Search tasks with real-time QuickPick interface
+ * Search tasks with real-time QuickPick interface with cancellation support
  */
 export async function searchTasks(taskService: TaskService, taskTreeProvider: TaskTreeProvider, extensionUri: vscode.Uri): Promise<void> {
 	try {
+		const config = ConfigUtils.getConfig();
 		const quickPick = vscode.window.createQuickPick();
 		quickPick.placeholder = 'Type to search tasks...';
 		quickPick.matchOnDescription = true;
@@ -232,15 +273,21 @@ export async function searchTasks(taskService: TaskService, taskTreeProvider: Ta
 		quickPick.items = [backItem];
 
 		let searchTimeout: NodeJS.Timeout | undefined;
+		let currentSearchOperation: CancellableOperation | undefined;
 
 		// Handle real-time search as user types
 		quickPick.onDidChangeValue(async (value) => {
+			// Cancel previous search operation
+			if (currentSearchOperation) {
+				currentSearchOperation.cancel();
+			}
+
 			// Clear previous timeout
 			if (searchTimeout) {
 				clearTimeout(searchTimeout);
 			}
 
-			// Debounce search to avoid too many requests
+			// Debounce search using configured delay
 			searchTimeout = setTimeout(async () => {
 				if (value.trim().length === 0) {
 					// Show only back option when empty
@@ -261,11 +308,21 @@ export async function searchTasks(taskService: TaskService, taskTreeProvider: Ta
 					return;
 				}
 
+				// Create new search operation with cancellation support
+				currentSearchOperation = new CancellableOperation();
+
 				try {
 					const results = await taskService.searchTasks({
 						query: value.trim(),
-						limit: 50
+						pageSize: config.search.pageSize,
+						threshold: config.search.threshold,
+						signal: currentSearchOperation.signal
 					});
+
+					// Check if this search was cancelled
+					if (currentSearchOperation.isAborted) {
+						return;
+					}
 
 					const items: vscode.QuickPickItem[] = [backItem];
 
@@ -276,7 +333,19 @@ export async function searchTasks(taskService: TaskService, taskTreeProvider: Ta
 							detail: 'Try different keywords'
 						});
 					} else {
-						items.push(...results.map(result => ({
+						// Show pagination info if there are many results
+						const totalResults = results.length;
+						const displayedResults = results.slice(0, config.search.pageSize);
+
+						if (totalResults > config.search.pageSize) {
+							items.push({
+								label: `$(info) Showing ${displayedResults.length} of ${totalResults} results`,
+								description: 'Refine your search for better results',
+								detail: ''
+							});
+						}
+
+						items.push(...displayedResults.map(result => ({
 							label: `$(${result.task.completed ? 'check' : 'circle-outline'}) ${result.task.name}`,
 							description: result.projectName,
 							detail: `${result.task.details} (${Math.round(result.score * 100)}% match)`,
@@ -286,16 +355,23 @@ export async function searchTasks(taskService: TaskService, taskTreeProvider: Ta
 
 					quickPick.items = items;
 				} catch (error) {
+					// Don't show error if operation was just cancelled
+					if (error instanceof Error && error.message.includes('cancelled')) {
+						return;
+					}
+
+					const serviceError = ErrorUtils.createServiceError('TaskService', 'searchTasks', error);
+					ErrorHandler.handleError(serviceError, ErrorHandler.createContext('search_tasks', { query: value.trim() }));
 					quickPick.items = [
 						backItem,
 						{
 							label: '$(error) Search failed',
-							description: `Error: ${error}`,
+							description: 'An error occurred while searching',
 							detail: 'Please try again'
 						}
 					];
 				}
-			}, 300); // 300ms debounce
+			}, config.search.debounceMs);
 		});
 
 		// Handle item selection
@@ -319,12 +395,20 @@ export async function searchTasks(taskService: TaskService, taskTreeProvider: Ta
 
 		// Handle cancellation
 		quickPick.onDidHide(() => {
+			// Cancel any ongoing search operation
+			if (currentSearchOperation) {
+				currentSearchOperation.cancel();
+			}
+			if (searchTimeout) {
+				clearTimeout(searchTimeout);
+			}
 			quickPick.dispose();
 		});
 
 		quickPick.show();
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to open task search: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'searchTasks', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('open_task_search'));
 	}
 }
 

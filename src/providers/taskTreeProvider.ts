@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { Project, Task, Subtask } from '../models/index';
 import { TaskService, TaskSearchResult } from '../services/taskService';
 import { WorkspaceUtils } from '../utils/index';
+import { isTaskSearchResult } from '../types/formTypes';
 
 /**
  * Tree item types for the task tree
@@ -21,8 +22,8 @@ export class TaskTreeItem extends vscode.TreeItem {
     super(
       type === 'search-prompt' ? 'Search tasks...' :
       type === 'clear-search' ? 'Back to projects' :
-      type === 'task' && 'projectName' in (data as any) ?
-        `${(data as TaskSearchResult).task.name} (${(data as TaskSearchResult).projectName})` :
+      type === 'task' && isTaskSearchResult(data) ?
+        `${data.task.name} (${data.projectName})` :
       (data as Project | Task | Subtask).name,
       collapsibleState
     );
@@ -33,8 +34,8 @@ export class TaskTreeItem extends vscode.TreeItem {
     this.contextValue = this.getContextValue();
     this.id = type === 'search-prompt' ? 'search-prompt' :
               type === 'clear-search' ? 'clear-search' :
-              type === 'task' && 'projectName' in (data as any) ?
-                `search-task-${(data as TaskSearchResult).task.id}` :
+              type === 'task' && isTaskSearchResult(data) ?
+                `search-task-${data.task.id}` :
                 `${type}-${(data as Project | Task | Subtask).id}`;
   }
 
@@ -48,11 +49,10 @@ export class TaskTreeItem extends vscode.TreeItem {
         const project = this.data as Project;
         return `${project.description}\n\nCreated: ${new Date(project.createdAt).toLocaleString()}`;
       case 'task':
-        if ('projectName' in (this.data as any)) {
+        if (isTaskSearchResult(this.data)) {
           // Search result task
-          const searchResult = this.data as TaskSearchResult;
-          const task = searchResult.task;
-          return `${task.details}\n\nProject: ${searchResult.projectName}\nStatus: ${task.completed ? 'Completed' : 'Pending'}\nRelevance: ${Math.round(searchResult.score * 100)}%\nCreated: ${new Date(task.createdAt).toLocaleString()}`;
+          const task = this.data.task;
+          return `${task.details}\n\nProject: ${this.data.projectName}\nStatus: ${task.completed ? 'Completed' : 'Pending'}\nRelevance: ${Math.round(this.data.score * 100)}%\nCreated: ${new Date(task.createdAt).toLocaleString()}`;
         } else {
           // Regular task
           const task = this.data as Task;
@@ -78,10 +78,9 @@ export class TaskTreeItem extends vscode.TreeItem {
       case 'project':
         return new vscode.ThemeIcon('folder');
       case 'task':
-        if ('projectName' in (this.data as any)) {
+        if (isTaskSearchResult(this.data)) {
           // Search result task
-          const searchResult = this.data as TaskSearchResult;
-          const task = searchResult.task;
+          const task = this.data.task;
           return new vscode.ThemeIcon(task.completed ? 'check' : 'circle-outline');
         } else {
           // Regular task
@@ -99,10 +98,9 @@ export class TaskTreeItem extends vscode.TreeItem {
       return this.type;
     }
 
-    if (this.type === 'task' && 'projectName' in (this.data as any)) {
+    if (this.type === 'task' && isTaskSearchResult(this.data)) {
       // Search result task
-      const searchResult = this.data as TaskSearchResult;
-      const task = searchResult.task;
+      const task = this.data.task;
       return `task${task.completed ? '-completed' : ''}`;
     }
 
@@ -198,7 +196,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
         case 'project':
           return await this.getTaskItems((element.data as Project).id);
         case 'task':
-          if ('projectName' in (element.data as any)) {
+          if (isTaskSearchResult(element.data)) {
             // Search result task - no children
             return [];
           } else {

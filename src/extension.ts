@@ -7,12 +7,12 @@ import { WorkspaceUtils } from './utils/index';
 import { CreateProjectInput, Project } from './models/index';
 import * as taskCommands from './views/taskCommands';
 import * as memoryCommands from './views/memoryCommands';
+import { ErrorHandler, ErrorUtils, ServiceError, ValidationError } from './utils/errorHandler';
 
 /**
  * Extension activation function
  */
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Agentic Tools MCP Companion is now active!');
 
 	// Initialize services
 	const taskService = TaskService.getInstance();
@@ -20,8 +20,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Initialize memory service asynchronously
 	memoryService.initialize().catch(error => {
-		console.error('Failed to initialize memory service:', error);
-		vscode.window.showWarningMessage('Memory functionality may be limited: ' + error.message);
+		const serviceError = ErrorUtils.createServiceError('MemoryService', 'initialize', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('service_initialization'));
 	});
 
 	// Create tree data providers
@@ -215,7 +215,7 @@ async function checkWorkspace(): Promise<void> {
 			WorkspaceUtils.showPermissionError();
 		} else {
 			// Other errors are usually about missing structure, which will be created automatically
-			console.log('Workspace validation warnings:', validation.errors);
+			// Log at debug level only - these are expected warnings
 		}
 	}
 }
@@ -224,6 +224,7 @@ async function checkWorkspace(): Promise<void> {
  * Create a new project
  */
 async function createProject(taskService: TaskService): Promise<void> {
+	let projectName = '';
 	try {
 		const name = await vscode.window.showInputBox({
 			prompt: 'Enter project name',
@@ -239,7 +240,7 @@ async function createProject(taskService: TaskService): Promise<void> {
 			}
 		});
 
-		if (!name) return;
+		if (!name) {return;}
 
 		const description = await vscode.window.showInputBox({
 			prompt: 'Enter project description',
@@ -252,17 +253,19 @@ async function createProject(taskService: TaskService): Promise<void> {
 			}
 		});
 
-		if (description === undefined) return;
+		if (description === undefined) {return;}
 
 		const input: CreateProjectInput = {
 			name: name.trim(),
 			description: description?.trim() || ''
 		};
 
+		projectName = input.name;
 		await taskService.createProject(input);
 		vscode.window.showInformationMessage(`Project "${name}" created successfully!`);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to create project: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'createProject', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('create_project', { projectName }));
 	}
 }
 
@@ -270,11 +273,10 @@ async function createProject(taskService: TaskService): Promise<void> {
  * Edit a project
  */
 async function editProject(taskService: TaskService, item: TaskTreeItem): Promise<void> {
-	if (item.type !== 'project') return;
+	if (item.type !== 'project') {return;}
 
+	const project = item.data as Project;
 	try {
-		const project = item.data as Project;
-
 		const name = await vscode.window.showInputBox({
 			prompt: 'Enter project name',
 			value: project.name,
@@ -289,7 +291,7 @@ async function editProject(taskService: TaskService, item: TaskTreeItem): Promis
 			}
 		});
 
-		if (!name) return;
+		if (!name) {return;}
 
 		const description = await vscode.window.showInputBox({
 			prompt: 'Enter project description',
@@ -302,7 +304,7 @@ async function editProject(taskService: TaskService, item: TaskTreeItem): Promis
 			}
 		});
 
-		if (description === undefined) return;
+		if (description === undefined) {return;}
 
 		await taskService.updateProject(project.id, {
 			name: name.trim(),
@@ -311,6 +313,10 @@ async function editProject(taskService: TaskService, item: TaskTreeItem): Promis
 
 		vscode.window.showInformationMessage(`Project "${name}" updated successfully!`);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to update project: ${error}`);
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'updateProject', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('update_project', {
+			projectId: project.id,
+			projectName: project.name
+		}));
 	}
 }

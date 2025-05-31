@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { Subtask, CreateSubtaskInput, UpdateSubtaskInput } from '../models/subtask';
 import { TaskService } from '../services/taskService';
 import { WebviewUtils } from './webviewUtils';
+import { SubtaskFormData, FormValidationResult } from '../types/formTypes';
+import { ErrorHandler, ErrorUtils, ServiceError, ValidationError } from '../utils/errorHandler';
 
 export interface SubtaskEditorData {
   mode: 'create' | 'edit';
@@ -77,7 +79,7 @@ export class SubtaskEditor {
   /**
    * Handle save action from webview
    */
-  private async handleSave(formData: any, editorData: SubtaskEditorData): Promise<void> {
+  private async handleSave(formData: SubtaskFormData, editorData: SubtaskEditorData): Promise<void> {
     try {
       // Validate the form data
       const validation = this.validateFormData(formData);
@@ -122,14 +124,20 @@ export class SubtaskEditor {
       // Close the editor
       this.dispose();
     } catch (error) {
-      vscode.window.showErrorMessage(`Failed to save subtask: ${error}`);
+      const serviceError = ErrorUtils.createServiceError('SubtaskEditor', 'handleSave', error);
+      ErrorHandler.handleError(serviceError, ErrorHandler.createContext('subtask_editor_save', {
+        mode: editorData.mode,
+        subtaskId: editorData.subtask?.id,
+        taskId: editorData.taskId,
+        subtaskName: formData.name
+      }));
     }
   }
 
   /**
    * Validate form data
    */
-  private validateFormData(data: any): { isValid: boolean; error?: string } {
+  private validateFormData(data: SubtaskFormData): FormValidationResult {
     if (!data.name || data.name.trim().length === 0) {
       return { isValid: false, error: 'Subtask name is required' };
     }

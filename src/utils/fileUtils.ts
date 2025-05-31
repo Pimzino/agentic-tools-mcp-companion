@@ -2,6 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { StorageData } from '../models/index';
+import { ErrorUtils, FileOperationError } from './errorHandler';
 
 /**
  * Utility functions for file operations
@@ -18,13 +19,18 @@ export class FileUtils {
       const data = JSON.parse(content) as StorageData;
 
       // Validate structure
-      if (!data.projects) data.projects = [];
-      if (!data.tasks) data.tasks = [];
-      if (!data.subtasks) data.subtasks = [];
+      if (!data.projects) {data.projects = [];}
+      if (!data.tasks) {data.tasks = [];}
+      if (!data.subtasks) {data.subtasks = [];}
 
       return data;
     } catch (error) {
       // If file doesn't exist or is corrupted, return empty structure
+      // Log the error for debugging but don't throw - this is expected behavior
+      if (error instanceof Error && !error.message.includes('ENOENT')) {
+        // Only log non-file-not-found errors
+        console.error('FileUtils.readTasksFile: Unexpected error reading file:', error.message);
+      }
       return {
         projects: [],
         tasks: [],
@@ -58,7 +64,7 @@ export class FileUtils {
       } catch {
         // Ignore cleanup errors
       }
-      throw error;
+      throw ErrorUtils.createFileError('write', filePath, error);
     }
   }
 
@@ -75,7 +81,7 @@ export class FileUtils {
       await fs.copyFile(filePath, backupPath);
       return backupPath;
     } catch (error) {
-      throw new Error(`Failed to create backup: ${error}`);
+      throw ErrorUtils.createFileError('backup', filePath, error);
     }
   }
 
@@ -119,7 +125,7 @@ export class FileUtils {
     let lastModified: Date | null = null;
 
     const checkForChanges = async () => {
-      if (disposed) return;
+      if (disposed) {return;}
 
       try {
         const currentModified = await FileUtils.getModificationTime(filePath);

@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { Task, CreateTaskInput, UpdateTaskInput } from '../models/task';
 import { TaskService } from '../services/taskService';
 import { WebviewUtils } from './webviewUtils';
+import { TaskFormData, FormValidationResult } from '../types/formTypes';
+import { ErrorHandler, ErrorUtils, ServiceError, ValidationError } from '../utils/errorHandler';
 
 export interface TaskEditorData {
   mode: 'create' | 'edit';
@@ -77,7 +79,7 @@ export class TaskEditor {
   /**
    * Handle save action from webview
    */
-  private async handleSave(formData: any, editorData: TaskEditorData): Promise<void> {
+  private async handleSave(formData: TaskFormData, editorData: TaskEditorData): Promise<void> {
     try {
       // Validate the form data
       const validation = this.validateFormData(formData);
@@ -122,14 +124,20 @@ export class TaskEditor {
       // Close the editor
       this.dispose();
     } catch (error) {
-      vscode.window.showErrorMessage(`Failed to save task: ${error}`);
+      const serviceError = ErrorUtils.createServiceError('TaskEditor', 'handleSave', error);
+      ErrorHandler.handleError(serviceError, ErrorHandler.createContext('task_editor_save', {
+        mode: editorData.mode,
+        taskId: editorData.task?.id,
+        projectId: editorData.projectId,
+        taskName: formData.name
+      }));
     }
   }
 
   /**
    * Validate form data
    */
-  private validateFormData(data: any): { isValid: boolean; error?: string } {
+  private validateFormData(data: TaskFormData): FormValidationResult {
     if (!data.name || data.name.trim().length === 0) {
       return { isValid: false, error: 'Task name is required' };
     }
