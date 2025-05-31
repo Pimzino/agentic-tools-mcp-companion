@@ -6,6 +6,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.3] - 2025-05-31
+
+### Changed
+- **VSCode Compatibility**: Downgraded VSCode engine requirement from `^1.100.0` to `^1.96.0` for improved compatibility with Windsurf and Cursor editors
+
 ## [0.0.2] - 2025-05-31
 
 ### Added
