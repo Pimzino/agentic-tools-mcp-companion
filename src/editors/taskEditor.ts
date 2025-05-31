@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import { Task, CreateTaskInput, UpdateTaskInput } from '../models/task';
+import { Task, CreateTaskInput, UpdateTaskInput, ProjectOption, ValidationResult } from '../models/index';
 import { TaskService } from '../services/taskService';
 import { WebviewUtils } from './webviewUtils';
-import { TaskFormData, FormValidationResult } from '../types/formTypes';
+import { TaskFormData, TaskFormDataWithParent, FormValidationResult } from '../types/formTypes';
 import { ErrorHandler, ErrorUtils, ServiceError, ValidationError } from '../utils/errorHandler';
 
 export interface TaskEditorData {
@@ -10,6 +10,12 @@ export interface TaskEditorData {
   task?: Task;
   projectId?: string;
   projectName?: string;
+}
+
+export interface TaskEditorDataWithParent extends TaskEditorData {
+  availableProjects?: ProjectOption[];
+  selectedProjectId?: string;
+  allowParentChange?: boolean;
 }
 
 /**
@@ -25,34 +31,43 @@ export class TaskEditor {
   ) {}
 
   /**
-   * Show the task editor
+   * Show the task editor with enhanced parent selection support
    */
-  public async show(data: TaskEditorData): Promise<void> {
+  public async show(data: TaskEditorData | TaskEditorDataWithParent): Promise<void> {
     // Create or reveal the webview panel
     if (this.panel) {
       this.panel.reveal();
       return;
     }
 
+    // Load parent options for enhanced mode
+    const enhancedData = await this.prepareEditorData(data);
+
     this.panel = WebviewUtils.createWebviewPanel(
       'taskEditor',
-      data.mode === 'create' ? 'Create Task' : 'Edit Task',
+      enhancedData.mode === 'create' ? 'Create Task' : 'Edit Task',
       vscode.ViewColumn.One,
       WebviewUtils.getWebviewOptions(this.extensionUri)
     );
 
     // Set the HTML content
-    this.panel.webview.html = this.getWebviewContent(data);
+    this.panel.webview.html = this.getWebviewContent(enhancedData);
 
     // Handle messages from the webview
     this.panel.webview.onDidReceiveMessage(
       async (message) => {
         switch (message.type) {
           case 'save':
-            await this.handleSave(message.data, data);
+            await this.handleSave(message.data, enhancedData);
             break;
           case 'cancel':
             this.dispose();
+            break;
+          case 'load-projects':
+            await this.handleLoadProjects();
+            break;
+          case 'validate-parent':
+            await this.handleValidateParent(message.data);
             break;
         }
       },
@@ -72,14 +87,89 @@ export class TaskEditor {
     // Send initial data to webview
     this.panel.webview.postMessage({
       type: 'initialize',
-      data: data
+      data: enhancedData
     });
   }
 
   /**
-   * Handle save action from webview
+   * Prepare editor data with parent selection options
    */
-  private async handleSave(formData: TaskFormData, editorData: TaskEditorData): Promise<void> {
+  private async prepareEditorData(data: TaskEditorData | TaskEditorDataWithParent): Promise<TaskEditorDataWithParent> {
+    // Always enable parent selection based on design decision
+    const enhancedData: TaskEditorDataWithParent = {
+      ...data,
+      allowParentChange: true
+    };
+
+    try {
+      // Load available projects
+      enhancedData.availableProjects = await this.taskService.getAvailableProjects();
+
+      // Set selected project ID
+      if (data.mode === 'create' && data.projectId) {
+        enhancedData.selectedProjectId = data.projectId;
+      } else if (data.mode === 'edit' && data.task) {
+        enhancedData.selectedProjectId = data.task.projectId;
+      }
+    } catch (error) {
+      console.error('Failed to load parent options:', error);
+      // Fallback to basic mode if parent loading fails
+      enhancedData.allowParentChange = false;
+    }
+
+    return enhancedData;
+  }
+
+  /**
+   * Handle loading projects for parent selection
+   */
+  private async handleLoadProjects(): Promise<void> {
+    try {
+      const projects = await this.taskService.getAvailableProjects();
+      this.panel?.webview.postMessage({
+        type: 'projects-loaded',
+        data: projects
+      });
+    } catch (error) {
+      this.panel?.webview.postMessage({
+        type: 'error',
+        message: 'Failed to load projects'
+      });
+    }
+  }
+
+  /**
+   * Handle parent validation
+   */
+  private async handleValidateParent(data: { projectId: string; taskId?: string }): Promise<void> {
+    try {
+      const validation = await this.taskService.validateParentAssignment(
+        'task',
+        null, // null for new tasks
+        data.projectId
+      );
+
+      this.panel?.webview.postMessage({
+        type: 'validation-result',
+        data: validation
+      });
+    } catch (error) {
+      this.panel?.webview.postMessage({
+        type: 'validation-result',
+        data: {
+          isValid: false,
+          errors: ['Failed to validate parent assignment'],
+          warnings: [],
+          requiresConfirmation: false
+        }
+      });
+    }
+  }
+
+  /**
+   * Handle save action from webview with parent selection support
+   */
+  private async handleSave(formData: TaskFormData | TaskFormDataWithParent, editorData: TaskEditorDataWithParent): Promise<void> {
     try {
       // Validate the form data
       const validation = this.validateFormData(formData);
@@ -91,34 +181,77 @@ export class TaskEditor {
         return;
       }
 
-      if (editorData.mode === 'create') {
-        // Create new task
-        if (!editorData.projectId) {
-          throw new Error('Project ID is required for creating tasks');
-        }
+      // Determine project ID from form data or editor data
+      const projectId = this.getProjectId(formData, editorData);
+      if (!projectId) {
+        this.panel?.webview.postMessage({
+          type: 'validation-error',
+          error: 'Project selection is required'
+        });
+        return;
+      }
 
+      if (editorData.mode === 'create') {
+        // Create new task with parent selection
         const input: CreateTaskInput = {
           name: formData.name.trim(),
           details: formData.details.trim(),
-          projectId: editorData.projectId
+          projectId: projectId
         };
 
-        await this.taskService.createTask(input);
+        await this.taskService.createTaskWithParent(input);
         vscode.window.showInformationMessage(`Task "${input.name}" created successfully!`);
       } else {
-        // Update existing task
+        // Update existing task with potential parent change
         if (!editorData.task) {
           throw new Error('Task data is required for editing');
         }
 
-        const updates: UpdateTaskInput = {
-          name: formData.name.trim(),
-          details: formData.details.trim(),
-          completed: formData.completed
-        };
+        // Check if parent changed
+        const parentChanged = this.hasParentChanged(formData, editorData);
 
-        await this.taskService.updateTask(editorData.task.id, updates);
-        vscode.window.showInformationMessage(`Task "${updates.name}" updated successfully!`);
+        if (parentChanged) {
+          // Validate parent assignment and show confirmation if needed
+          const validation = await this.taskService.validateParentAssignment(
+            'task',
+            editorData.task.id,
+            projectId
+          );
+
+          if (!validation.isValid) {
+            this.panel?.webview.postMessage({
+              type: 'validation-error',
+              error: validation.errors.join(', ')
+            });
+            return;
+          }
+
+          if (validation.requiresConfirmation) {
+            const confirmed = await this.showConfirmationDialog(validation.warnings);
+            if (!confirmed) {return;}
+          }
+
+          // Perform move operation if parent changed
+          const updates: UpdateTaskInput = {
+            name: formData.name.trim(),
+            details: formData.details.trim(),
+            completed: formData.completed,
+            ...(projectId !== editorData.task.projectId && { projectId })
+          };
+
+          await this.taskService.updateTaskWithParent(editorData.task.id, updates);
+        } else {
+          // Regular update without parent change
+          const updates: UpdateTaskInput = {
+            name: formData.name.trim(),
+            details: formData.details.trim(),
+            completed: formData.completed
+          };
+
+          await this.taskService.updateTask(editorData.task.id, updates);
+        }
+
+        vscode.window.showInformationMessage(`Task "${formData.name}" updated successfully!`);
       }
 
       // Close the editor
@@ -128,10 +261,61 @@ export class TaskEditor {
       ErrorHandler.handleError(serviceError, ErrorHandler.createContext('task_editor_save', {
         mode: editorData.mode,
         taskId: editorData.task?.id,
-        projectId: editorData.projectId,
+        projectId: this.getProjectId(formData, editorData),
         taskName: formData.name
       }));
     }
+  }
+
+  /**
+   * Get project ID from form data or editor data
+   */
+  private getProjectId(formData: TaskFormData | TaskFormDataWithParent, editorData: TaskEditorDataWithParent): string | undefined {
+    // Check if form data includes project selection
+    if ('projectId' in formData && formData.projectId) {
+      return formData.projectId;
+    }
+
+    // Fall back to editor data
+    return editorData.selectedProjectId || editorData.projectId;
+  }
+
+  /**
+   * Check if parent has changed
+   */
+  private hasParentChanged(formData: TaskFormData | TaskFormDataWithParent, editorData: TaskEditorDataWithParent): boolean {
+    if (editorData.mode === 'create') {return false;}
+
+    const newProjectId = this.getProjectId(formData, editorData);
+    const originalProjectId = editorData.task?.projectId;
+
+    return newProjectId !== originalProjectId;
+  }
+
+  /**
+   * Show confirmation dialog for cross-project moves
+   */
+  private async showConfirmationDialog(warnings: string[]): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.panel?.webview.postMessage({
+        type: 'show-confirmation',
+        message: 'Cross-project move detected',
+        details: warnings,
+        callback: 'confirmation-result'
+      });
+
+      // Set up one-time listener for response
+      const disposable = this.panel?.webview.onDidReceiveMessage((message) => {
+        if (message.type === 'confirmation-result') {
+          disposable?.dispose();
+          resolve(message.confirmed);
+        }
+      });
+
+      if (disposable) {
+        this.disposables.push(disposable);
+      }
+    });
   }
 
   /**
@@ -151,12 +335,13 @@ export class TaskEditor {
   }
 
   /**
-   * Generate the webview HTML content
+   * Generate the webview HTML content with parent selection support
    */
-  private getWebviewContent(data: TaskEditorData): string {
+  private getWebviewContent(data: TaskEditorDataWithParent): string {
     const task = data.task;
     const isEdit = data.mode === 'edit';
-    const title = isEdit ? `Edit Task: ${task?.name}` : `Create Task in ${data.projectName}`;
+    const hasParentSelection = data.allowParentChange && data.availableProjects && data.availableProjects.length > 0;
+    const title = isEdit ? `Edit Task: ${task?.name}` : 'Create Task';
 
     return `
       <!DOCTYPE html>
@@ -168,13 +353,94 @@ export class TaskEditor {
         <style>
           ${WebviewUtils.getCommonCSS()}
 
-          .project-info {
+          .parent-selection {
             background-color: var(--vscode-editor-inactiveSelectionBackground);
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid var(--vscode-widget-border);
+          }
+
+          .parent-selection h3 {
+            margin: 0 0 12px 0;
+            font-size: 1.1em;
+            color: var(--vscode-foreground);
+          }
+
+          .warning-message {
+            background-color: var(--vscode-inputValidation-warningBackground);
+            border: 1px solid var(--vscode-inputValidation-warningBorder);
+            color: var(--vscode-inputValidation-warningForeground);
             padding: 12px;
             border-radius: 4px;
-            margin-bottom: 20px;
+            margin-top: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+          }
+
+          .warning-icon {
+            font-size: 16px;
+            margin-top: 2px;
+          }
+
+          .warning-content strong {
+            display: block;
+            margin-bottom: 4px;
+          }
+
+          .current-parent-info {
+            background-color: var(--vscode-editor-background);
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-bottom: 12px;
             font-size: 0.9em;
+            border-left: 3px solid var(--vscode-textBlockQuote-border);
+          }
+
+          .info-label {
             color: var(--vscode-descriptionForeground);
+            font-weight: 500;
+          }
+
+          .info-value {
+            color: var(--vscode-foreground);
+            margin-top: 2px;
+          }
+
+          .helper-text {
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 4px;
+          }
+
+          .confirmation-dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+          }
+
+          .confirmation-content {
+            background-color: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-widget-border);
+            border-radius: 6px;
+            padding: 20px;
+            max-width: 400px;
+            width: 90%;
+          }
+
+          .confirmation-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 16px;
           }
         </style>
       </head>
@@ -182,9 +448,38 @@ export class TaskEditor {
         <div class="form-container">
           <h1>${title}</h1>
 
-          ${data.projectName ? `
-            <div class="project-info">
-              <strong>Project:</strong> ${data.projectName}
+          ${hasParentSelection ? `
+            <div class="parent-selection">
+              <h3>Project Selection</h3>
+
+              ${isEdit ? `
+                <div class="current-parent-info" id="currentParentInfo">
+                  <div class="info-label">Current Project:</div>
+                  <div class="info-value" id="currentParentValue"></div>
+                </div>
+              ` : ''}
+
+              <div class="form-group">
+                <label for="projectSelect">Project *</label>
+                <select id="projectSelect" name="projectId" required>
+                  <option value="">Select a project...</option>
+                  ${data.availableProjects?.map(project =>
+                    `<option value="${project.id}" ${project.id === data.selectedProjectId ? 'selected' : ''}>
+                      ${project.name} (${project.taskCount} tasks)
+                    </option>`
+                  ).join('') || ''}
+                </select>
+                <div class="helper-text">Choose the project that will contain this task</div>
+                <div class="error-message"></div>
+              </div>
+
+              <div class="warning-message" id="crossProjectWarning" style="display: none;">
+                <div class="warning-icon">⚠️</div>
+                <div class="warning-content">
+                  <strong>Cross-project move detected</strong>
+                  <p>This will move the task to a different project. All subtasks will be moved as well.</p>
+                </div>
+              </div>
             </div>
           ` : ''}
 
@@ -237,13 +532,100 @@ export class TaskEditor {
           </form>
         </div>
 
+        <!-- Confirmation Dialog -->
+        <div class="confirmation-dialog" id="confirmationDialog">
+          <div class="confirmation-content">
+            <h3 id="confirmationTitle">Confirm Action</h3>
+            <p id="confirmationMessage"></p>
+            <div id="confirmationDetails"></div>
+            <div class="confirmation-buttons">
+              <button type="button" class="btn-secondary" id="confirmationCancel">Cancel</button>
+              <button type="button" class="btn-primary" id="confirmationConfirm">Confirm</button>
+            </div>
+          </div>
+        </div>
+
         <script>
           ${WebviewUtils.getCommonJS()}
 
+          let editorData = null;
+
           // Initialize form
           function initializeForm(data) {
+            editorData = data;
             setupCharCounter('taskName', 50, 'nameCounter');
-            // No character counter for details (unlimited)
+
+            if (data.allowParentChange && data.mode === 'edit') {
+              showCurrentParent(data);
+            }
+
+            setupParentSelection();
+          }
+
+          // Show current parent info
+          function showCurrentParent(data) {
+            const info = document.getElementById('currentParentInfo');
+            const value = document.getElementById('currentParentValue');
+
+            if (data.task && data.availableProjects) {
+              const currentProject = data.availableProjects.find(p => p.id === data.task.projectId);
+              if (currentProject) {
+                value.textContent = currentProject.name;
+                info.style.display = 'block';
+              }
+            }
+          }
+
+          // Setup parent selection handling
+          function setupParentSelection() {
+            const projectSelect = document.getElementById('projectSelect');
+            if (!projectSelect) return;
+
+            projectSelect.addEventListener('change', (e) => {
+              checkForCrossProjectMove();
+            });
+          }
+
+          // Check for cross-project move
+          function checkForCrossProjectMove() {
+            if (!editorData || editorData.mode !== 'edit') return;
+
+            const selectedProjectId = document.getElementById('projectSelect').value;
+            const originalProjectId = editorData.task?.projectId;
+
+            const warning = document.getElementById('crossProjectWarning');
+
+            if (selectedProjectId && originalProjectId && selectedProjectId !== originalProjectId) {
+              warning.style.display = 'flex';
+            } else {
+              warning.style.display = 'none';
+            }
+          }
+
+          // Handle confirmation dialog
+          function showConfirmationDialog(title, message, details) {
+            return new Promise((resolve) => {
+              const dialog = document.getElementById('confirmationDialog');
+              const titleEl = document.getElementById('confirmationTitle');
+              const messageEl = document.getElementById('confirmationMessage');
+              const detailsEl = document.getElementById('confirmationDetails');
+
+              titleEl.textContent = title;
+              messageEl.textContent = message;
+              detailsEl.innerHTML = details.map(d => '<p>' + d + '</p>').join('');
+
+              dialog.style.display = 'flex';
+
+              document.getElementById('confirmationConfirm').onclick = () => {
+                dialog.style.display = 'none';
+                resolve(true);
+              };
+
+              document.getElementById('confirmationCancel').onclick = () => {
+                dialog.style.display = 'none';
+                resolve(false);
+              };
+            });
           }
 
           // Form submission
@@ -257,10 +639,20 @@ export class TaskEditor {
               completed: formData.has('completed')
             };
 
+            // Add project selection if available
+            const projectSelect = document.getElementById('projectSelect');
+            if (projectSelect && projectSelect.value) {
+              data.projectId = projectSelect.value;
+            }
+
             // Validate
             let isValid = true;
             isValid &= validateField('taskName', (value) => value.trim().length > 0 && value.trim().length <= 50, 'Task name is required and must be 50 characters or less');
-            // No validation for details (unlimited)
+
+            // Validate project selection if parent selection is enabled
+            if (projectSelect) {
+              isValid &= validateField('projectSelect', (value) => value.trim().length > 0, 'Project selection is required');
+            }
 
             if (isValid) {
               vscode.postMessage({ type: 'save', data });
@@ -270,6 +662,34 @@ export class TaskEditor {
           // Cancel button
           document.getElementById('cancelBtn').addEventListener('click', () => {
             vscode.postMessage({ type: 'cancel' });
+          });
+
+          // Handle messages from extension
+          window.addEventListener('message', event => {
+            const message = event.data;
+
+            switch (message.type) {
+              case 'initialize':
+                initializeForm(message.data);
+                break;
+
+              case 'show-confirmation':
+                showConfirmationDialog(message.message, '', message.details).then(confirmed => {
+                  vscode.postMessage({ type: 'confirmation-result', confirmed });
+                });
+                break;
+
+              case 'validation-error':
+                // Show validation error
+                const errorElements = document.querySelectorAll('.error-message');
+                errorElements.forEach(el => el.textContent = '');
+
+                // Show the error in a general location
+                if (errorElements.length > 0) {
+                  errorElements[0].textContent = message.error;
+                }
+                break;
+            }
           });
         </script>
       </body>

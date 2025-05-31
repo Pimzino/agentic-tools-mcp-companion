@@ -21,6 +21,24 @@ export interface SubtaskFormData {
 }
 
 /**
+ * Extended task form data with parent selection
+ */
+export interface TaskFormDataWithParent extends TaskFormData {
+  projectId: string;
+  originalProjectId?: string; // For edit mode comparison
+}
+
+/**
+ * Extended subtask form data with parent selection
+ */
+export interface SubtaskFormDataWithParent extends SubtaskFormData {
+  taskId: string;
+  projectId: string; // Inferred from selected task
+  originalTaskId?: string;    // For edit mode comparison
+  originalProjectId?: string; // For edit mode comparison
+}
+
+/**
  * Project form data structure
  */
 export interface ProjectFormData {

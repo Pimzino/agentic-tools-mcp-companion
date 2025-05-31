@@ -21,6 +21,7 @@ This VS Code extension is part of a complete task and memory management ecosyste
 ### 🎯 Task Management
 - **Hierarchical Tree View**: Projects → Tasks → Subtasks
 - **Complete CRUD Operations**: Create, read, update, and delete projects, tasks, and subtasks
+- **Parent Selection & Management**: Choose parent projects/tasks during creation and move items between parents
 - **Progress Tracking**: Visual completion status with icons
 - **Context Menus**: Right-click actions for all operations
 - **Real-time Updates**: Automatic refresh when data changes
@@ -94,6 +95,31 @@ For the full experience with AI assistant integration:
 - **Toggle Completion**: Right-click tasks/subtasks and select "Toggle Completion"
 - **Delete Items**: Right-click and select "Delete" (with confirmation)
 - **Refresh View**: Click the refresh button to reload data
+
+### Parent Management & Moving Tasks
+
+The extension provides powerful capabilities for organizing your tasks by allowing you to select parents during creation and move items between different parents:
+
+#### Parent Selection During Creation
+- **Creating Tasks**: When creating a new task, you can select which project it belongs to from a dropdown list
+- **Creating Subtasks**: When creating a new subtask, you can choose both the target project and the specific task within that project using a two-step selection process
+
+#### Moving Existing Items
+- **Move Task to Project**: Right-click any task and select "Move to Project" to relocate it (along with all its subtasks) to a different project
+- **Move Subtask to Task**: Right-click any subtask and select "Move to Task" to relocate it to a different task, even across projects
+
+#### Smart Features
+- **Cross-Project Moves**: Subtasks can be moved between tasks in different projects seamlessly
+- **Batch Operations**: When moving a task, all its subtasks move with it automatically
+- **Validation**: The system prevents invalid moves and provides clear feedback
+- **Confirmation Dialogs**: Cross-project moves are confirmed to prevent accidental data reorganization
+- **Automatic Refresh**: The tree view updates automatically after successful moves
+
+#### Benefits
+- **Flexible Organization**: Reorganize your task hierarchy as your project evolves
+- **Easy Reclassification**: Move tasks between projects when priorities change
+- **Efficient Workflow**: No need to delete and recreate tasks when structure changes
+- **Data Integrity**: All relationships and completion status are preserved during moves
 
 ### Data Storage
 
@@ -192,18 +218,6 @@ For testing the complete ecosystem:
    npm install
    ```
 4. Test both tools with the same workspace data
-
-## Release Notes
-
-### 0.0.1
-
-Initial release with comprehensive functionality:
-- **Task Management**: Hierarchical tree view for projects, tasks, and subtasks
-- **Memory Management**: JSON file-based storage with title/content architecture
-- **Complete CRUD Operations**: Create, read, update, delete for all entities
-- **Text-based Search**: Relevance-scored memory search functionality
-- **Context Menus**: Right-click actions for all operations
-- **Data Compatibility**: 100% compatible with agentic-tools-mcp server v1.5.0+
 
 ## Support
 

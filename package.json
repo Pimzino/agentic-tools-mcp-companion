@@ -112,6 +112,16 @@
         "icon": "$(trash)"
       },
       {
+        "command": "agentic-tools.moveTaskToProject",
+        "title": "Move to Project",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "agentic-tools.moveSubtaskToTask",
+        "title": "Move to Task",
+        "icon": "$(arrow-right)"
+      },
+      {
         "command": "agentic-tools.refreshMemories",
         "title": "Refresh",
         "icon": "$(refresh)"
@@ -220,6 +230,16 @@
           "command": "agentic-tools.deleteSubtask",
           "when": "view == agenticTasksView && (viewItem == subtask || viewItem == subtask-completed)",
           "group": "inline"
+        },
+        {
+          "command": "agentic-tools.moveTaskToProject",
+          "when": "view == agenticTasksView && (viewItem == task || viewItem == task-completed)",
+          "group": "move"
+        },
+        {
+          "command": "agentic-tools.moveSubtaskToTask",
+          "when": "view == agenticTasksView && (viewItem == subtask || viewItem == subtask-completed)",
+          "group": "move"
         },
         {
           "command": "agentic-tools.editMemory",

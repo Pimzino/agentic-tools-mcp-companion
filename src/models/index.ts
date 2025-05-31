@@ -34,6 +34,28 @@ export type {
 
 export { DEFAULT_MEMORY_CONFIG, MEMORY_CONSTANTS } from './memory';
 
+// Parent Selection Models
+export type {
+  CreateTaskWithParentInput,
+  CreateSubtaskWithParentInput,
+  UpdateTaskWithParentInput,
+  UpdateSubtaskWithParentInput,
+  ProjectOption,
+  TaskOption,
+  MoveOperationResult,
+  ValidationResult,
+  HierarchyPath,
+  ParentValidationRules,
+} from './parentSelection';
+
+export {
+  DEFAULT_PARENT_VALIDATION_RULES,
+  isCreateTaskWithParentInput,
+  isCreateSubtaskWithParentInput,
+  isUpdateTaskWithParentInput,
+  isUpdateSubtaskWithParentInput
+} from './parentSelection';
+
 // Import types for use in interfaces
 import type { Project } from './project';
 import type { Task } from './task';

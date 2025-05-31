@@ -132,6 +132,15 @@ export function activate(context: vscode.ExtensionContext) {
 			await taskCommands.deleteSubtask(taskService, item);
 		}),
 
+		// Parent move commands
+		vscode.commands.registerCommand('agentic-tools.moveTaskToProject', async (item: TaskTreeItem) => {
+			await taskCommands.moveTaskToProject(taskService, taskTreeProvider, item);
+		}),
+
+		vscode.commands.registerCommand('agentic-tools.moveSubtaskToTask', async (item: TaskTreeItem) => {
+			await taskCommands.moveSubtaskToTask(taskService, taskTreeProvider, item);
+		}),
+
 		// Memory commands
 		vscode.commands.registerCommand('agentic-tools.refreshMemories', () => {
 			memoryTreeProvider.refresh();

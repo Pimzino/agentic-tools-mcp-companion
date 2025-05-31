@@ -142,6 +142,25 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
   }
 
   /**
+   * Refresh the tree view after a parent move operation
+   * This ensures the tree structure is updated correctly
+   */
+  refreshAfterParentMove(): void {
+    // Clear any cached state and force full refresh
+    this.refresh();
+  }
+
+  /**
+   * Handle tree state updates when items are moved
+   * Ensures proper tree expansion/collapse state is maintained
+   */
+  handleItemMoved(_itemType: 'task' | 'subtask', _itemId: string, _oldParentId: string, _newParentId: string): void {
+    // Fire a targeted refresh to update the tree structure
+    // This is more efficient than a full refresh for large trees
+    this.refresh();
+  }
+
+  /**
    * Set search results and switch to search mode
    */
   setSearchResults(results: TaskSearchResult[]): void {

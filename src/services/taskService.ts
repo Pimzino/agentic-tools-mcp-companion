@@ -9,7 +9,22 @@ import {
   UpdateProjectInput,
   UpdateTaskInput,
   UpdateSubtaskInput,
-  StorageData
+  StorageData,
+  CreateTaskWithParentInput,
+  CreateSubtaskWithParentInput,
+  UpdateTaskWithParentInput,
+  UpdateSubtaskWithParentInput,
+  ProjectOption,
+  TaskOption,
+  MoveOperationResult,
+  ValidationResult,
+  HierarchyPath,
+  ParentValidationRules,
+  DEFAULT_PARENT_VALIDATION_RULES,
+  isCreateTaskWithParentInput,
+  isCreateSubtaskWithParentInput,
+  isUpdateTaskWithParentInput,
+  isUpdateSubtaskWithParentInput
 } from '../models/index';
 import { WorkspaceUtils, FileUtils } from '../utils/index';
 import { ConfigUtils, CancellableOperation, PaginatedSearchResult, debounce } from '../utils/configUtils';
@@ -559,5 +574,380 @@ export class TaskService {
     }
 
     return { isValid: errors.length === 0, errors };
+  }
+
+  // Parent Selection Methods
+
+  /**
+   * Get all projects available for task creation/assignment
+   */
+  async getAvailableProjects(): Promise<ProjectOption[]> {
+    const data = await this.loadData();
+
+    const projectOptions: ProjectOption[] = [];
+
+    for (const project of data.projects) {
+      const taskCount = data.tasks.filter(t => t.projectId === project.id).length;
+
+      projectOptions.push({
+        id: project.id,
+        name: project.name,
+        taskCount
+      });
+    }
+
+    return projectOptions.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * Get all tasks available for subtask assignment (excluding current subtask's descendants)
+   */
+  async getAvailableTasksForSubtask(currentSubtaskId?: string): Promise<TaskOption[]> {
+    const data = await this.loadData();
+
+    const taskOptions: TaskOption[] = [];
+    const projectMap = new Map(data.projects.map(p => [p.id, p.name]));
+
+    for (const task of data.tasks) {
+      // Skip the current subtask's parent task if editing
+      if (currentSubtaskId) {
+        const currentSubtask = data.subtasks.find(s => s.id === currentSubtaskId);
+        if (currentSubtask && task.id === currentSubtask.taskId) {
+          continue;
+        }
+      }
+
+      const subtaskCount = data.subtasks.filter(s => s.taskId === task.id).length;
+      const projectName = projectMap.get(task.projectId) || 'Unknown Project';
+
+      taskOptions.push({
+        id: task.id,
+        name: task.name,
+        projectId: task.projectId,
+        projectName,
+        subtaskCount
+      });
+    }
+
+    return taskOptions.sort((a, b) => {
+      // Sort by project name first, then task name
+      const projectCompare = a.projectName.localeCompare(b.projectName);
+      return projectCompare !== 0 ? projectCompare : a.name.localeCompare(b.name);
+    });
+  }
+
+  /**
+   * Get tasks within a specific project for subtask assignment
+   */
+  async getTasksInProject(projectId: string, excludeSubtaskId?: string): Promise<TaskOption[]> {
+    const data = await this.loadData();
+
+    const project = data.projects.find(p => p.id === projectId);
+    if (!project) {
+      return [];
+    }
+
+    const taskOptions: TaskOption[] = [];
+    const projectTasks = data.tasks.filter(t => t.projectId === projectId);
+
+    for (const task of projectTasks) {
+      // Skip the current subtask's parent task if editing
+      if (excludeSubtaskId) {
+        const currentSubtask = data.subtasks.find(s => s.id === excludeSubtaskId);
+        if (currentSubtask && task.id === currentSubtask.taskId) {
+          continue;
+        }
+      }
+
+      const subtaskCount = data.subtasks.filter(s => s.taskId === task.id).length;
+
+      taskOptions.push({
+        id: task.id,
+        name: task.name,
+        projectId: task.projectId,
+        projectName: project.name,
+        subtaskCount
+      });
+    }
+
+    return taskOptions.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Move Operation Methods
+
+  /**
+   * Move task to different project
+   */
+  async moveTaskToProject(taskId: string, newProjectId: string): Promise<MoveOperationResult> {
+    const validation = await this.validateParentAssignment('task', taskId, newProjectId);
+    if (!validation.isValid) {
+      throw new Error(validation.errors.join(', '));
+    }
+
+    const data = await this.loadData();
+    const task = data.tasks.find(t => t.id === taskId);
+    const oldProject = data.projects.find(p => p.id === task?.projectId);
+    const newProject = data.projects.find(p => p.id === newProjectId);
+
+    if (!task || !oldProject || !newProject) {
+      throw new Error('Task or project not found');
+    }
+
+    // Update task
+    const taskIndex = data.tasks.findIndex(t => t.id === taskId);
+    data.tasks[taskIndex] = {
+      ...task,
+      projectId: newProjectId,
+      updatedAt: FileUtils.getCurrentTimestamp()
+    };
+
+    // Update all subtasks of this task
+    const subtasks = data.subtasks.filter(s => s.taskId === taskId);
+    for (let i = 0; i < data.subtasks.length; i++) {
+      if (data.subtasks[i].taskId === taskId) {
+        data.subtasks[i] = {
+          ...data.subtasks[i],
+          projectId: newProjectId,
+          updatedAt: FileUtils.getCurrentTimestamp()
+        };
+      }
+    }
+
+    await this.saveData(data);
+
+    return {
+      success: true,
+      oldParent: { id: oldProject.id, name: oldProject.name, type: 'project' },
+      newParent: { id: newProject.id, name: newProject.name, type: 'project' },
+      warnings: validation.warnings
+    };
+  }
+
+  /**
+   * Move subtask to different task (potentially different project)
+   */
+  async moveSubtaskToTask(subtaskId: string, newTaskId: string): Promise<MoveOperationResult> {
+    const validation = await this.validateParentAssignment('subtask', subtaskId, newTaskId);
+    if (!validation.isValid) {
+      throw new Error(validation.errors.join(', '));
+    }
+
+    const data = await this.loadData();
+    const subtask = data.subtasks.find(s => s.id === subtaskId);
+    const oldTask = data.tasks.find(t => t.id === subtask?.taskId);
+    const newTask = data.tasks.find(t => t.id === newTaskId);
+
+    if (!subtask || !oldTask || !newTask) {
+      throw new Error('Subtask or task not found');
+    }
+
+    // Update subtask
+    const subtaskIndex = data.subtasks.findIndex(s => s.id === subtaskId);
+    data.subtasks[subtaskIndex] = {
+      ...subtask,
+      taskId: newTaskId,
+      projectId: newTask.projectId,
+      updatedAt: FileUtils.getCurrentTimestamp()
+    };
+
+    await this.saveData(data);
+
+    return {
+      success: true,
+      oldParent: { id: oldTask.id, name: oldTask.name, type: 'task' },
+      newParent: { id: newTask.id, name: newTask.name, type: 'task' },
+      warnings: validation.warnings
+    };
+  }
+
+  // Validation Methods
+
+  /**
+   * Validate proposed parent assignment
+   */
+  async validateParentAssignment(
+    itemType: 'task' | 'subtask',
+    itemId: string | null,
+    newParentId: string
+  ): Promise<ValidationResult> {
+    const result: ValidationResult = {
+      isValid: true,
+      errors: [],
+      warnings: [],
+      requiresConfirmation: false
+    };
+
+    const data = await this.loadData();
+
+    if (itemType === 'task') {
+      // Validate project exists
+      const project = data.projects.find(p => p.id === newParentId);
+      if (!project) {
+        result.isValid = false;
+        result.errors.push('Selected project does not exist');
+        return result;
+      }
+
+      // Check for cross-project move
+      if (itemId) {
+        const task = data.tasks.find(t => t.id === itemId);
+        if (task && task.projectId !== newParentId) {
+          result.warnings.push('This will move the task and all its subtasks to a different project');
+          result.requiresConfirmation = true;
+        }
+      }
+    } else {
+      // Validate task exists
+      const task = data.tasks.find(t => t.id === newParentId);
+      if (!task) {
+        result.isValid = false;
+        result.errors.push('Selected task does not exist');
+        return result;
+      }
+
+      // Check for circular reference (currently not possible with subtasks, but keeping for extensibility)
+      if (itemId) {
+        const isCircular = await this.wouldCreateCircularReference(itemId, newParentId);
+        if (isCircular) {
+          result.isValid = false;
+          result.errors.push('Cannot move subtask to its own descendant');
+          return result;
+        }
+
+        // Check for cross-project move
+        const subtask = data.subtasks.find(s => s.id === itemId);
+        if (subtask && subtask.projectId !== task.projectId) {
+          result.warnings.push('This will move the subtask to a different project');
+          result.requiresConfirmation = true;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Get hierarchy path for an item
+   */
+  async getHierarchyPath(itemType: 'task' | 'subtask', itemId: string): Promise<HierarchyPath[]> {
+    const data = await this.loadData();
+    const path: HierarchyPath[] = [];
+
+    if (itemType === 'task') {
+      const task = data.tasks.find(t => t.id === itemId);
+      if (task) {
+        const project = data.projects.find(p => p.id === task.projectId);
+        if (project) {
+          path.push({ level: 0, type: 'project', id: project.id, name: project.name });
+          path.push({ level: 1, type: 'task', id: task.id, name: task.name });
+        }
+      }
+    } else {
+      const subtask = data.subtasks.find(s => s.id === itemId);
+      if (subtask) {
+        const task = data.tasks.find(t => t.id === subtask.taskId);
+        if (task) {
+          const project = data.projects.find(p => p.id === task.projectId);
+          if (project) {
+            path.push({ level: 0, type: 'project', id: project.id, name: project.name });
+            path.push({ level: 1, type: 'task', id: task.id, name: task.name });
+            path.push({ level: 2, type: 'subtask', id: subtask.id, name: subtask.name });
+          }
+        }
+      }
+    }
+
+    return path;
+  }
+
+  /**
+   * Check if moving an item would create a circular reference
+   * Currently not possible with the 3-level hierarchy, but keeping for future extensibility
+   */
+  private async wouldCreateCircularReference(_itemId: string, _newParentId: string): Promise<boolean> {
+    // For the current 3-level hierarchy (Project → Task → Subtask),
+    // subtasks can't have children, so no circular reference is possible
+    // But we keep this method for future extensibility
+    return false;
+  }
+
+  // Enhanced CRUD Methods
+
+  /**
+   * Enhanced createTask with flexible parent selection
+   */
+  async createTaskWithParent(input: CreateTaskInput | CreateTaskWithParentInput): Promise<Task> {
+    // Validate project exists
+    const project = await this.getProject(input.projectId);
+    if (!project) {
+      throw new Error(`Project with ID ${input.projectId} not found`);
+    }
+
+    // Use existing createTask method
+    return this.createTask(input);
+  }
+
+  /**
+   * Enhanced createSubtask with parent validation
+   */
+  async createSubtaskWithParent(input: CreateSubtaskInput | CreateSubtaskWithParentInput): Promise<Subtask> {
+    // Validate task exists and get its project
+    const task = await this.getTask(input.taskId);
+    if (!task) {
+      throw new Error(`Task with ID ${input.taskId} not found`);
+    }
+
+    // Use existing createSubtask method
+    return this.createSubtask(input);
+  }
+
+  /**
+   * Enhanced updateTask with optional parent reassignment
+   */
+  async updateTaskWithParent(id: string, updates: UpdateTaskInput | UpdateTaskWithParentInput): Promise<Task | null> {
+    // Check if this includes a parent change
+    if (isUpdateTaskWithParentInput(updates) && updates.projectId) {
+      const currentTask = await this.getTask(id);
+      if (currentTask && currentTask.projectId !== updates.projectId) {
+        // This is a move operation
+        await this.moveTaskToProject(id, updates.projectId);
+
+        // Remove projectId from updates to avoid double-processing
+        const { projectId, ...remainingUpdates } = updates;
+        if (Object.keys(remainingUpdates).length > 0) {
+          return this.updateTask(id, remainingUpdates);
+        } else {
+          return this.getTask(id);
+        }
+      }
+    }
+
+    // Use existing updateTask method
+    return this.updateTask(id, updates);
+  }
+
+  /**
+   * Enhanced updateSubtask with optional parent reassignment
+   */
+  async updateSubtaskWithParent(id: string, updates: UpdateSubtaskInput | UpdateSubtaskWithParentInput): Promise<Subtask | null> {
+    // Check if this includes a parent change
+    if (isUpdateSubtaskWithParentInput(updates) && updates.taskId) {
+      const currentSubtask = await this.getSubtask(id);
+      if (currentSubtask && currentSubtask.taskId !== updates.taskId) {
+        // This is a move operation
+        await this.moveSubtaskToTask(id, updates.taskId);
+
+        // Remove taskId and projectId from updates to avoid double-processing
+        const { taskId, projectId, ...remainingUpdates } = updates;
+        if (Object.keys(remainingUpdates).length > 0) {
+          return this.updateSubtask(id, remainingUpdates);
+        } else {
+          return this.getSubtask(id);
+        }
+      }
+    }
+
+    // Use existing updateSubtask method
+    return this.updateSubtask(id, updates);
   }
 }

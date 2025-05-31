@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { TaskTreeItem, TaskTreeProvider } from '../providers/taskTreeProvider';
 import { TaskService } from '../services/taskService';
-import { Project, Task, Subtask } from '../models/index';
+import { Project, Task, Subtask, MoveOperationResult } from '../models/index';
 import { TaskEditor, TaskEditorData } from '../editors/taskEditor';
 import { SubtaskEditor, SubtaskEditorData } from '../editors/subtaskEditor';
 import { isTaskSearchResult } from '../types/formTypes';
@@ -411,7 +411,6 @@ export async function searchTasks(taskService: TaskService, taskTreeProvider: Ta
 		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('open_task_search'));
 	}
 }
-
 /**
  * Clear task search results
  */
@@ -419,5 +418,165 @@ export function clearTaskSearch(taskTreeProvider: TaskTreeProvider): void {
 	taskTreeProvider.clearSearch();
 	vscode.window.showInformationMessage('Search cleared.');
 }
+
+/**
+ * Move task to a different project
+ */
+export async function moveTaskToProject(taskService: TaskService, taskTreeProvider: TaskTreeProvider, item: TaskTreeItem): Promise<void> {
+	if (item.type !== 'task') {return;}
+
+	const task = item.data as Task;
+	try {
+		// Get available projects
+		const projectOptions = await taskService.getAvailableProjects();
+
+		// Filter out current project
+		const availableProjects = projectOptions.filter(p => p.id !== task.projectId);
+
+		if (availableProjects.length === 0) {
+			vscode.window.showInformationMessage('No other projects available to move this task to.');
+			return;
+		}
+
+		// Show project selection
+		const projectItems = availableProjects.map(project => ({
+			label: project.name,
+			description: `${project.taskCount} task(s)`,
+			projectId: project.id
+		}));
+
+		const selectedProject = await vscode.window.showQuickPick(projectItems, {
+			placeHolder: `Select project to move "${task.name}" to`,
+			matchOnDescription: true
+		});
+
+		if (!selectedProject) {return;}
+
+		// Validate the move
+		const validation = await taskService.validateParentAssignment('task', task.id, selectedProject.projectId);
+
+		if (!validation.isValid) {
+			vscode.window.showErrorMessage(`Cannot move task: ${validation.errors.join(', ')}`);
+			return;
+		}
+
+		// Show confirmation if required
+		if (validation.requiresConfirmation) {
+			const confirmationMessage = [
+				`Move task "${task.name}" to project "${selectedProject.label}"?`,
+				...validation.warnings
+			].join('\n\n');
+
+			const confirmation = await vscode.window.showWarningMessage(
+				confirmationMessage,
+				{ modal: true },
+				'Move Task'
+			);
+
+			if (confirmation !== 'Move Task') {return;}
+		}
+
+		// Perform the move
+		const result: MoveOperationResult = await taskService.moveTaskToProject(task.id, selectedProject.projectId);
+
+		if (result.success) {
+			// Refresh tree to show new structure
+			taskTreeProvider.refreshAfterParentMove();
+
+			// Show success message
+			let message = `Task "${task.name}" moved to project "${selectedProject.label}" successfully!`;
+			if (result.warnings && result.warnings.length > 0) {
+				message += '\n\nWarnings:\n' + result.warnings.join('\n');
+			}
+			vscode.window.showInformationMessage(message);
+		}
+	} catch (error) {
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'moveTaskToProject', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('move_task_to_project', {
+			taskId: task.id,
+			taskName: task.name
+		}));
+	}
+}
+
+/**
+ * Move subtask to a different task
+ */
+export async function moveSubtaskToTask(taskService: TaskService, taskTreeProvider: TaskTreeProvider, item: TaskTreeItem): Promise<void> {
+	if (item.type !== 'subtask') {return;}
+
+	const subtask = item.data as Subtask;
+	try {
+		// Get available tasks
+		const taskOptions = await taskService.getAvailableTasksForSubtask(subtask.id);
+
+		if (taskOptions.length === 0) {
+			vscode.window.showInformationMessage('No other tasks available to move this subtask to.');
+			return;
+		}
+
+		// Show task selection grouped by project
+		const taskItems = taskOptions.map(task => ({
+			label: task.name,
+			description: `${task.projectName} • ${task.subtaskCount} subtask(s)`,
+			detail: task.projectName,
+			taskId: task.id
+		}));
+
+		const selectedTask = await vscode.window.showQuickPick(taskItems, {
+			placeHolder: `Select task to move "${subtask.name}" to`,
+			matchOnDescription: true,
+			matchOnDetail: true
+		});
+
+		if (!selectedTask) {return;}
+
+		// Validate the move
+		const validation = await taskService.validateParentAssignment('subtask', subtask.id, selectedTask.taskId);
+
+		if (!validation.isValid) {
+			vscode.window.showErrorMessage(`Cannot move subtask: ${validation.errors.join(', ')}`);
+			return;
+		}
+
+		// Show confirmation if required
+		if (validation.requiresConfirmation) {
+			const confirmationMessage = [
+				`Move subtask "${subtask.name}" to task "${selectedTask.label}"?`,
+				...validation.warnings
+			].join('\n\n');
+
+			const confirmation = await vscode.window.showWarningMessage(
+				confirmationMessage,
+				{ modal: true },
+				'Move Subtask'
+			);
+
+			if (confirmation !== 'Move Subtask') {return;}
+		}
+
+		// Perform the move
+		const result: MoveOperationResult = await taskService.moveSubtaskToTask(subtask.id, selectedTask.taskId);
+
+		if (result.success) {
+			// Refresh tree to show new structure
+			taskTreeProvider.refreshAfterParentMove();
+
+			// Show success message
+			let message = `Subtask "${subtask.name}" moved to task "${selectedTask.label}" successfully!`;
+			if (result.warnings && result.warnings.length > 0) {
+				message += '\n\nWarnings:\n' + result.warnings.join('\n');
+			}
+			vscode.window.showInformationMessage(message);
+		}
+	} catch (error) {
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'moveSubtaskToTask', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('move_subtask_to_task', {
+			subtaskId: subtask.id,
+			subtaskName: subtask.name
+		}));
+	}
+}
+
 
 
