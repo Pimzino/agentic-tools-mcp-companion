@@ -21,6 +21,14 @@ export interface SubtaskFormData {
 }
 
 /**
+ * Project form data structure
+ */
+export interface ProjectFormData {
+  name: string;
+  description: string;
+}
+
+/**
  * Memory form data structure
  */
 export interface MemoryFormData {

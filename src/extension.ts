@@ -8,6 +8,7 @@ import { CreateProjectInput, Project } from './models/index';
 import * as taskCommands from './views/taskCommands';
 import * as memoryCommands from './views/memoryCommands';
 import { ErrorHandler, ErrorUtils, ServiceError, ValidationError } from './utils/errorHandler';
+import { ProjectEditor } from './editors/projectEditor';
 
 /**
  * Extension activation function
@@ -86,11 +87,11 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// Project commands
 		vscode.commands.registerCommand('agentic-tools.createProject', async () => {
-			await createProject(taskService);
+			await createProject(taskService, context.extensionUri);
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.editProject', async (item: TaskTreeItem) => {
-			await editProject(taskService, item);
+			await editProject(taskService, item, context.extensionUri);
 		}),
 
 		vscode.commands.registerCommand('agentic-tools.deleteProject', async (item: TaskTreeItem) => {
@@ -223,100 +224,34 @@ async function checkWorkspace(): Promise<void> {
 /**
  * Create a new project
  */
-async function createProject(taskService: TaskService): Promise<void> {
-	let projectName = '';
+async function createProject(taskService: TaskService, extensionUri: vscode.Uri): Promise<void> {
 	try {
-		const name = await vscode.window.showInputBox({
-			prompt: 'Enter project name',
-			placeHolder: 'My Project',
-			validateInput: (value) => {
-				if (!value || value.trim().length === 0) {
-					return 'Project name is required';
-				}
-				if (value.trim().length > 100) {
-					return 'Project name must be 100 characters or less';
-				}
-				return null;
-			}
-		});
-
-		if (!name) {return;}
-
-		const description = await vscode.window.showInputBox({
-			prompt: 'Enter project description',
-			placeHolder: 'Project description...',
-			validateInput: (value) => {
-				if (value && value.length > 500) {
-					return 'Description must be 500 characters or less';
-				}
-				return null;
-			}
-		});
-
-		if (description === undefined) {return;}
-
-		const input: CreateProjectInput = {
-			name: name.trim(),
-			description: description?.trim() || ''
-		};
-
-		projectName = input.name;
-		await taskService.createProject(input);
-		vscode.window.showInformationMessage(`Project "${name}" created successfully!`);
+		const projectEditor = new ProjectEditor(extensionUri, taskService);
+		await projectEditor.show({ mode: 'create' });
 	} catch (error) {
-		const serviceError = ErrorUtils.createServiceError('TaskService', 'createProject', error);
-		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('create_project', { projectName }));
+		const serviceError = ErrorUtils.createServiceError('ProjectEditor', 'createProject', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('create_project'));
 	}
 }
 
 /**
  * Edit a project
  */
-async function editProject(taskService: TaskService, item: TaskTreeItem): Promise<void> {
+async function editProject(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
 	if (item.type !== 'project') {return;}
 
-	const project = item.data as Project;
 	try {
-		const name = await vscode.window.showInputBox({
-			prompt: 'Enter project name',
-			value: project.name,
-			validateInput: (value) => {
-				if (!value || value.trim().length === 0) {
-					return 'Project name is required';
-				}
-				if (value.trim().length > 100) {
-					return 'Project name must be 100 characters or less';
-				}
-				return null;
-			}
+		const project = item.data as Project;
+		const projectEditor = new ProjectEditor(extensionUri, taskService);
+		await projectEditor.show({
+			mode: 'edit',
+			project: project
 		});
-
-		if (!name) {return;}
-
-		const description = await vscode.window.showInputBox({
-			prompt: 'Enter project description',
-			value: project.description,
-			validateInput: (value) => {
-				if (value && value.length > 500) {
-					return 'Description must be 500 characters or less';
-				}
-				return null;
-			}
-		});
-
-		if (description === undefined) {return;}
-
-		await taskService.updateProject(project.id, {
-			name: name.trim(),
-			description: description.trim()
-		});
-
-		vscode.window.showInformationMessage(`Project "${name}" updated successfully!`);
 	} catch (error) {
-		const serviceError = ErrorUtils.createServiceError('TaskService', 'updateProject', error);
-		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('update_project', {
-			projectId: project.id,
-			projectName: project.name
+		const serviceError = ErrorUtils.createServiceError('ProjectEditor', 'editProject', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('edit_project', {
+			projectId: (item.data as Project).id,
+			projectName: (item.data as Project).name
 		}));
 	}
 }
