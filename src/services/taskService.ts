@@ -249,6 +249,16 @@ export class TaskService {
       throw new Error(`Project with ID ${input.projectId} not found`);
     }
 
+    // Validate dependencies exist if provided
+    if (input.dependsOn && input.dependsOn.length > 0) {
+      for (const depId of input.dependsOn) {
+        const depTask = data.tasks.find(t => t.id === depId);
+        if (!depTask) {
+          throw new Error(`Dependency task with ID "${depId}" not found`);
+        }
+      }
+    }
+
     const now = FileUtils.getCurrentTimestamp();
     const task: Task = {
       id: FileUtils.generateId(),
@@ -257,7 +267,13 @@ export class TaskService {
       projectId: input.projectId,
       completed: false,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      dependsOn: input.dependsOn || [],
+      priority: input.priority || 5,
+      complexity: input.complexity,
+      status: input.status || 'pending',
+      tags: input.tags || [],
+      estimatedHours: input.estimatedHours
     };
 
     data.tasks.push(task);

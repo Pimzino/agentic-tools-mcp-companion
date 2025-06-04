@@ -192,11 +192,17 @@ export class TaskEditor {
       }
 
       if (editorData.mode === 'create') {
-        // Create new task with parent selection
+        // Create new task with parent selection and enhanced fields
         const input: CreateTaskInput = {
           name: formData.name.trim(),
           details: formData.details.trim(),
-          projectId: projectId
+          projectId: projectId,
+          dependsOn: formData.dependsOn || [],
+          priority: formData.priority || 5,
+          complexity: formData.complexity,
+          status: formData.status || 'pending',
+          tags: formData.tags || [],
+          estimatedHours: formData.estimatedHours
         };
 
         await this.taskService.createTaskWithParent(input);
@@ -231,21 +237,35 @@ export class TaskEditor {
             if (!confirmed) {return;}
           }
 
-          // Perform move operation if parent changed
+          // Perform move operation if parent changed with enhanced fields
           const updates: UpdateTaskInput = {
             name: formData.name.trim(),
             details: formData.details.trim(),
             completed: formData.completed,
+            dependsOn: formData.dependsOn,
+            priority: formData.priority,
+            complexity: formData.complexity,
+            status: formData.status,
+            tags: formData.tags,
+            estimatedHours: formData.estimatedHours,
+            actualHours: formData.actualHours,
             ...(projectId !== editorData.task.projectId && { projectId })
           };
 
           await this.taskService.updateTaskWithParent(editorData.task.id, updates);
         } else {
-          // Regular update without parent change
+          // Regular update without parent change with enhanced fields
           const updates: UpdateTaskInput = {
             name: formData.name.trim(),
             details: formData.details.trim(),
-            completed: formData.completed
+            completed: formData.completed,
+            dependsOn: formData.dependsOn,
+            priority: formData.priority,
+            complexity: formData.complexity,
+            status: formData.status,
+            tags: formData.tags,
+            estimatedHours: formData.estimatedHours,
+            actualHours: formData.actualHours
           };
 
           await this.taskService.updateTask(editorData.task.id, updates);
@@ -442,6 +462,19 @@ export class TaskEditor {
             justify-content: flex-end;
             margin-top: 16px;
           }
+
+          .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+          }
+
+          @media (max-width: 600px) {
+            .form-row {
+              grid-template-columns: 1fr;
+            }
+          }
         </style>
       </head>
       <body>
@@ -507,6 +540,100 @@ export class TaskEditor {
                 placeholder="Enter detailed description of the task..."
               >${task?.details || ''}</textarea>
               <div class="error-message"></div>
+            </div>
+
+            <!-- Enhanced Task Fields -->
+            <div class="form-row">
+              <div class="form-group">
+                <label for="taskPriority">Priority</label>
+                <select id="taskPriority" name="priority">
+                  <option value="">Default (5)</option>
+                  <option value="1" ${task?.priority === 1 ? 'selected' : ''}>1 - Lowest</option>
+                  <option value="2" ${task?.priority === 2 ? 'selected' : ''}>2 - Low</option>
+                  <option value="3" ${task?.priority === 3 ? 'selected' : ''}>3 - Below Normal</option>
+                  <option value="4" ${task?.priority === 4 ? 'selected' : ''}>4 - Normal</option>
+                  <option value="5" ${task?.priority === 5 ? 'selected' : ''}>5 - Normal</option>
+                  <option value="6" ${task?.priority === 6 ? 'selected' : ''}>6 - Above Normal</option>
+                  <option value="7" ${task?.priority === 7 ? 'selected' : ''}>7 - High</option>
+                  <option value="8" ${task?.priority === 8 ? 'selected' : ''}>8 - Higher</option>
+                  <option value="9" ${task?.priority === 9 ? 'selected' : ''}>9 - Very High</option>
+                  <option value="10" ${task?.priority === 10 ? 'selected' : ''}>10 - Highest</option>
+                </select>
+                <div class="helper-text">Task priority (1-10, where 10 is highest)</div>
+              </div>
+
+              <div class="form-group">
+                <label for="taskComplexity">Complexity</label>
+                <select id="taskComplexity" name="complexity">
+                  <option value="">Not specified</option>
+                  <option value="1" ${task?.complexity === 1 ? 'selected' : ''}>1 - Very Simple</option>
+                  <option value="2" ${task?.complexity === 2 ? 'selected' : ''}>2 - Simple</option>
+                  <option value="3" ${task?.complexity === 3 ? 'selected' : ''}>3 - Easy</option>
+                  <option value="4" ${task?.complexity === 4 ? 'selected' : ''}>4 - Below Average</option>
+                  <option value="5" ${task?.complexity === 5 ? 'selected' : ''}>5 - Average</option>
+                  <option value="6" ${task?.complexity === 6 ? 'selected' : ''}>6 - Above Average</option>
+                  <option value="7" ${task?.complexity === 7 ? 'selected' : ''}>7 - Complex</option>
+                  <option value="8" ${task?.complexity === 8 ? 'selected' : ''}>8 - Very Complex</option>
+                  <option value="9" ${task?.complexity === 9 ? 'selected' : ''}>9 - Extremely Complex</option>
+                  <option value="10" ${task?.complexity === 10 ? 'selected' : ''}>10 - Most Complex</option>
+                </select>
+                <div class="helper-text">Task complexity (1-10, where 10 is most complex)</div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="taskStatus">Status</label>
+                <select id="taskStatus" name="status">
+                  <option value="pending" ${(task?.status || 'pending') === 'pending' ? 'selected' : ''}>⏳ Pending</option>
+                  <option value="in-progress" ${task?.status === 'in-progress' ? 'selected' : ''}>🔄 In Progress</option>
+                  <option value="blocked" ${task?.status === 'blocked' ? 'selected' : ''}>🚫 Blocked</option>
+                  <option value="done" ${task?.status === 'done' ? 'selected' : ''}>✅ Done</option>
+                </select>
+                <div class="helper-text">Current task status</div>
+              </div>
+
+              <div class="form-group">
+                <label for="taskEstimatedHours">Estimated Hours</label>
+                <input
+                  type="number"
+                  id="taskEstimatedHours"
+                  name="estimatedHours"
+                  placeholder="0"
+                  value="${task?.estimatedHours || ''}"
+                  min="0"
+                  step="0.5"
+                />
+                <div class="helper-text">Estimated time to complete (hours)</div>
+              </div>
+            </div>
+
+            ${isEdit ? `
+              <div class="form-group">
+                <label for="taskActualHours">Actual Hours</label>
+                <input
+                  type="number"
+                  id="taskActualHours"
+                  name="actualHours"
+                  placeholder="0"
+                  value="${task?.actualHours || ''}"
+                  min="0"
+                  step="0.5"
+                />
+                <div class="helper-text">Actual time spent (hours)</div>
+              </div>
+            ` : ''}
+
+            <div class="form-group">
+              <label for="taskTags">Tags</label>
+              <input
+                type="text"
+                id="taskTags"
+                name="tags"
+                placeholder="Enter tags separated by commas (e.g., frontend, urgent, bug)"
+                value="${task?.tags ? task.tags.join(', ') : ''}"
+              />
+              <div class="helper-text">Tags for categorization and filtering (comma-separated)</div>
             </div>
 
             ${isEdit ? `
@@ -636,7 +763,13 @@ export class TaskEditor {
             const data = {
               name: formData.get('name'),
               details: formData.get('details') || '',
-              completed: formData.has('completed')
+              completed: formData.has('completed'),
+              priority: formData.get('priority') ? parseInt(formData.get('priority')) : undefined,
+              complexity: formData.get('complexity') ? parseInt(formData.get('complexity')) : undefined,
+              status: formData.get('status') || 'pending',
+              estimatedHours: formData.get('estimatedHours') ? parseFloat(formData.get('estimatedHours')) : undefined,
+              actualHours: formData.get('actualHours') ? parseFloat(formData.get('actualHours')) : undefined,
+              tags: formData.get('tags') ? formData.get('tags').split(',').map(tag => tag.trim()).filter(tag => tag.length > 0) : []
             };
 
             // Add project selection if available

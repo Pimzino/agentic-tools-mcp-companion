@@ -3,12 +3,26 @@
  */
 
 /**
- * Task form data structure
+ * Task form data structure with enhanced fields for MCP server v1.7.0 compatibility
  */
 export interface TaskFormData {
   name: string;
   details: string;
   completed?: boolean;
+  /** Task dependencies - IDs of tasks that must be completed before this task */
+  dependsOn?: string[];
+  /** Task priority level (1-10, where 10 is highest priority) */
+  priority?: number;
+  /** Estimated complexity/effort (1-10, where 10 is most complex) */
+  complexity?: number;
+  /** Task status (pending, in-progress, blocked, done) */
+  status?: 'pending' | 'in-progress' | 'blocked' | 'done';
+  /** Tags for categorization and filtering */
+  tags?: string[];
+  /** Estimated time to complete in hours */
+  estimatedHours?: number;
+  /** Actual time spent in hours */
+  actualHours?: number;
 }
 
 /**

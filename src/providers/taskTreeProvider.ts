@@ -52,11 +52,53 @@ export class TaskTreeItem extends vscode.TreeItem {
         if (isTaskSearchResult(this.data)) {
           // Search result task
           const task = this.data.task;
-          return `${task.details}\n\nProject: ${this.data.projectName}\nStatus: ${task.completed ? 'Completed' : 'Pending'}\nRelevance: ${Math.round(this.data.score * 100)}%\nCreated: ${new Date(task.createdAt).toLocaleString()}`;
+          const statusText = task.status || (task.completed ? 'done' : 'pending');
+          const priorityText = task.priority ? `Priority: ${task.priority}/10` : '';
+          const complexityText = task.complexity ? `Complexity: ${task.complexity}/10` : '';
+          const tagsText = task.tags && task.tags.length > 0 ? `Tags: ${task.tags.join(', ')}` : '';
+          const timeText = task.estimatedHours ? `Estimated: ${task.estimatedHours}h` : '';
+          const actualTimeText = task.actualHours ? `Actual: ${task.actualHours}h` : '';
+          const depsText = task.dependsOn && task.dependsOn.length > 0 ? `Dependencies: ${task.dependsOn.length}` : '';
+
+          const details = [
+            task.details,
+            `Project: ${this.data.projectName}`,
+            `Status: ${statusText}`,
+            priorityText,
+            complexityText,
+            tagsText,
+            timeText,
+            actualTimeText,
+            depsText,
+            `Relevance: ${Math.round(this.data.score * 100)}%`,
+            `Created: ${new Date(task.createdAt).toLocaleString()}`
+          ].filter(Boolean).join('\n');
+
+          return details;
         } else {
           // Regular task
           const task = this.data as Task;
-          return `${task.details}\n\nStatus: ${task.completed ? 'Completed' : 'Pending'}\nCreated: ${new Date(task.createdAt).toLocaleString()}`;
+          const statusText = task.status || (task.completed ? 'done' : 'pending');
+          const priorityText = task.priority ? `Priority: ${task.priority}/10` : '';
+          const complexityText = task.complexity ? `Complexity: ${task.complexity}/10` : '';
+          const tagsText = task.tags && task.tags.length > 0 ? `Tags: ${task.tags.join(', ')}` : '';
+          const timeText = task.estimatedHours ? `Estimated: ${task.estimatedHours}h` : '';
+          const actualTimeText = task.actualHours ? `Actual: ${task.actualHours}h` : '';
+          const depsText = task.dependsOn && task.dependsOn.length > 0 ? `Dependencies: ${task.dependsOn.length}` : '';
+
+          const details = [
+            task.details,
+            `Status: ${statusText}`,
+            priorityText,
+            complexityText,
+            tagsText,
+            timeText,
+            actualTimeText,
+            depsText,
+            `Created: ${new Date(task.createdAt).toLocaleString()}`
+          ].filter(Boolean).join('\n');
+
+          return details;
         }
       case 'subtask':
         const subtask = this.data as Subtask;
@@ -65,7 +107,47 @@ export class TaskTreeItem extends vscode.TreeItem {
   }
 
   private getDescription(): string {
-    // No description needed - completion status is shown via icon change
+    if (this.type === 'task') {
+      let task: Task;
+      if (isTaskSearchResult(this.data)) {
+        task = this.data.task;
+      } else {
+        task = this.data as Task;
+      }
+
+      const parts: string[] = [];
+
+      // Add status indicator
+      if (task.status) {
+        const statusEmoji = {
+          'pending': '⏳',
+          'in-progress': '🔄',
+          'blocked': '🚫',
+          'done': '✅'
+        }[task.status] || '';
+        if (statusEmoji) parts.push(statusEmoji);
+      }
+
+      // Add priority indicator
+      if (task.priority && task.priority >= 8) {
+        parts.push('🔥'); // High priority
+      } else if (task.priority && task.priority >= 6) {
+        parts.push('⚡'); // Medium priority
+      }
+
+      // Add complexity indicator
+      if (task.complexity && task.complexity >= 8) {
+        parts.push('🧩'); // High complexity
+      }
+
+      // Add time tracking
+      if (task.estimatedHours) {
+        parts.push(`${task.estimatedHours}h`);
+      }
+
+      return parts.join(' ');
+    }
+
     return '';
   }
 

@@ -2,10 +2,10 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/Pimzino/agentic-tools-mcp-companion.svg)](https://github.com/Pimzino/agentic-tools-mcp-companion/stargazers)
 [![GitHub license](https://img.shields.io/github/license/Pimzino/agentic-tools-mcp-companion.svg)](https://github.com/Pimzino/agentic-tools-mcp-companion/blob/main/LICENSE)
-[![VS Code Version](https://img.shields.io/badge/VS%20Code-1.100.0%2B-blue.svg)](https://code.visualstudio.com/)
+[![VS Code Version](https://img.shields.io/badge/VS%20Code-1.96.0+-brightgreen.svg)](https://code.visualstudio.com/)
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
-A beautiful VS Code extension that provides a GUI interface for the [**agentic-tools-mcp**](https://github.com/Pimzino/agentic-tools-mcp) server functionality. This extension allows you to manage tasks and memories directly from VS Code with an intuitive, visual interface.
+A beautiful VS Code extension that provides a comprehensive GUI interface for the [**agentic-tools-mcp**](https://github.com/Pimzino/agentic-tools-mcp) server functionality. This extension allows you to manage tasks and memories directly from VS Code with an intuitive, visual interface featuring enhanced task metadata, priority management, and rich form editors.
 
 ## 🔗 Ecosystem
 
@@ -18,13 +18,27 @@ This VS Code extension is part of a complete task and memory management ecosyste
 
 ## Features
 
-### 🎯 Task Management
-- **Hierarchical Tree View**: Projects → Tasks → Subtasks
-- **Complete CRUD Operations**: Create, read, update, and delete projects, tasks, and subtasks
+### 🎯 Enhanced Task Management
+- **Hierarchical Tree View**: Projects → Tasks → Subtasks with rich visual indicators
+- **Enhanced Task Metadata**: Priority (1-10), complexity (1-10), status workflow, tags, and time tracking
+- **Visual Status Indicators**: ⏳ Pending, 🔄 In Progress, 🚫 Blocked, ✅ Done with emoji display
+- **Priority & Complexity Badges**: 🔥 High Priority (8+), ⚡ Medium Priority (6+), 🧩 High Complexity (8+)
+- **Rich Form Editors**: Comprehensive forms with responsive design and validation
+- **Time Tracking**: Estimated and actual hours with decimal precision
+- **Tag Management**: Comma-separated tag input for categorization and filtering
 - **Parent Selection & Management**: Choose parent projects/tasks during creation and move items between parents
-- **Progress Tracking**: Visual completion status with icons
-- **Context Menus**: Right-click actions for all operations
+- **Rich Tooltips**: Hover to see complete task information including all metadata
 - **Real-time Updates**: Automatic refresh when data changes
+
+### 📝 Rich Task Forms (MCP v1.7.0 Compatible)
+- **Priority Selection**: 1-10 scale dropdown with descriptive labels (Lowest to Highest)
+- **Complexity Estimation**: 1-10 scale dropdown with clear complexity descriptions
+- **Status Management**: Visual status selection with emoji indicators
+- **Tag Input**: Comma-separated tag management with helper text
+- **Time Tracking**: Estimated and actual hours with decimal precision support
+- **Responsive Design**: Two-column layout that adapts to different screen sizes
+- **Real-time Validation**: Client-side validation with helpful error messages
+- **Helper Text**: Contextual guidance for all form fields
 
 ### 🧠 Memory Management
 - **Text-based Search**: Find memories using natural language queries with relevance scoring
@@ -32,15 +46,17 @@ This VS Code extension is part of a complete task and memory management ecosyste
 - **Title + Content Architecture**: Separate title (50 chars max) and detailed content fields
 - **JSON File Storage**: Human-readable JSON files for easy portability and version control
 
-### 🔄 Data Compatibility
-- **100% Compatible**: Works seamlessly with existing agentic-tools-mcp data
+### 🔄 Data Compatibility & Enhanced Metadata
+- **MCP v1.7.0 Compatible**: Full support for enhanced task metadata (priority, complexity, status, tags, time tracking)
+- **Backward Compatible**: Works seamlessly with existing agentic-tools-mcp data
+- **Progressive Enhancement**: New metadata fields are optional, existing tasks continue to work
 - **Same File Formats**: Uses identical `.agentic-tools-mcp` directory structure
 - **Atomic Operations**: Safe, atomic file operations prevent data corruption
 - **Git-trackable**: All data can be committed alongside your project code
 
 ## Requirements
 
-- VSCode 1.100.0 or higher
+- VSCode 1.96.0 or higher
 - An open workspace folder
 - Node.js 18+ (for dependencies)
 
@@ -88,10 +104,30 @@ For the full experience with AI assistant integration:
 3. **Create Your First Project**: Click the "+" button in the Tasks view
 4. **Add Tasks and Subtasks**: Right-click on projects and tasks to add children
 
-### Task Management
+### Enhanced Task Management
 
+#### Visual Task Tree
+The extension displays your tasks with rich visual indicators:
+
+```
+📁 Project: Website Redesign
+├── 🔥⚡ Design mockups (Priority: 8, Complexity: 6) [16h] ⏳
+│   ├── ✅ Create wireframes
+│   └── 🔄 Design high-fidelity mockups
+├── 🧩 Backend API (Priority: 7, Complexity: 9) [32h] 🚫
+└── ✅ Setup development environment (Priority: 9, Complexity: 3) [4h] ✅
+```
+
+**Visual Indicators:**
+- 🔥 High Priority (8+), ⚡ Medium Priority (6+)
+- 🧩 High Complexity (8+)
+- ⏳ Pending, 🔄 In Progress, 🚫 Blocked, ✅ Done
+- [16h] Estimated hours display
+
+#### Task Operations
 - **Create Project**: Click the "+" button in the Tasks view title
-- **Edit Items**: Right-click any item and select "Edit"
+- **Create Enhanced Tasks**: Rich forms with priority, complexity, status, tags, and time tracking
+- **Edit Items**: Right-click any item and select "Edit" for comprehensive metadata editing
 - **Toggle Completion**: Right-click tasks/subtasks and select "Toggle Completion"
 - **Delete Items**: Right-click and select "Delete" (with confirmation)
 - **Refresh View**: Click the refresh button to reload data
@@ -180,15 +216,17 @@ This extension is designed to work seamlessly with the [agentic-tools-mcp](https
 **[Agentic Tools MCP Server](https://github.com/Pimzino/agentic-tools-mcp)** - The companion MCP server that enables AI assistant integration.
 
 **Key Features:**
-- 🔧 **MCP Tools**: Complete set of task and memory management tools for AI assistants
+- 🔧 **Enhanced MCP Tools**: Complete set of task and memory management tools with rich metadata support
+- 🤖 **Advanced AI Agent Tools**: PRD parsing, task recommendations, complexity analysis, progress inference, and research capabilities
 - 📦 **NPM Package**: Easy installation with `npm install -g @pimzino/agentic-tools-mcp`
 - 🤖 **AI Assistant Support**: Works with Claude Desktop, AugmentCode, and other MCP clients
 - 🔄 **Data Compatibility**: 100% compatible with this VS Code extension
 
-**Perfect for:**
-- AI assistant users who want task and memory management
-- Developers who prefer command-line tools
-- Anyone who wants to integrate task management into AI workflows
+**Perfect Collaboration:**
+- **Human Planning**: Use VS Code extension for visual task planning with rich metadata
+- **AI Execution**: AI agents access comprehensive task data and use advanced tools
+- **Seamless Integration**: Real-time sync between visual interface and AI capabilities
+- **Enhanced Workflow**: Human creativity + AI intelligence for optimal productivity
 
 ## Development
 
