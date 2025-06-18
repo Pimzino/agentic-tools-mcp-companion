@@ -230,6 +230,29 @@ export class TaskService {
   }
 
   /**
+   * Get tasks filtered by project and parent (for unified task model)
+   * Version 2.0: Added for unlimited hierarchy support
+   */
+  async getTasksByParent(projectId: string, parentId?: string): Promise<Task[]> {
+    const data = await this.loadData();
+    return data.tasks.filter((task: Task) => {
+      // Must be in the specified project
+      if (task.projectId !== projectId) {
+        return false;
+      }
+
+      // Filter by parent ID
+      if (parentId === undefined) {
+        // Return top-level tasks (no parent)
+        return !task.parentId;
+      } else {
+        // Return tasks with the specified parent
+        return task.parentId === parentId;
+      }
+    });
+  }
+
+  /**
    * Get a task by ID
    */
   async getTask(id: string): Promise<Task | null> {
@@ -239,6 +262,7 @@ export class TaskService {
 
   /**
    * Create a new task
+   * Version 2.0: Updated for unified task model with parentId support
    */
   async createTask(input: CreateTaskInput): Promise<Task> {
     const data = await this.loadData();
@@ -247,6 +271,18 @@ export class TaskService {
     const project = data.projects.find(p => p.id === input.projectId);
     if (!project) {
       throw new Error(`Project with ID ${input.projectId} not found`);
+    }
+
+    // Validate parent task exists if parentId is provided
+    if (input.parentId) {
+      const parentTask = data.tasks.find(t => t.id === input.parentId);
+      if (!parentTask) {
+        throw new Error(`Parent task with ID ${input.parentId} not found`);
+      }
+      // Ensure parent is in the same project
+      if (parentTask.projectId !== input.projectId) {
+        throw new Error('Parent task must be in the same project');
+      }
     }
 
     // Validate dependencies exist if provided
@@ -265,6 +301,7 @@ export class TaskService {
       name: input.name,
       details: input.details,
       projectId: input.projectId,
+      parentId: input.parentId,
       completed: false,
       createdAt: now,
       updatedAt: now,
@@ -284,6 +321,7 @@ export class TaskService {
 
   /**
    * Update a task
+   * Version 2.0: Updated for unified task model with parentId support
    */
   async updateTask(id: string, updates: UpdateTaskInput): Promise<Task | null> {
     const data = await this.loadData();
@@ -294,6 +332,24 @@ export class TaskService {
     }
 
     const task = data.tasks[taskIndex];
+
+    // Validate parent task exists if parentId is being updated
+    if (updates.parentId !== undefined) {
+      if (updates.parentId) {
+        if (updates.parentId === id) {
+          throw new Error('Task cannot be its own parent');
+        }
+        const parentTask = data.tasks.find(t => t.id === updates.parentId);
+        if (!parentTask) {
+          throw new Error(`Parent task with ID ${updates.parentId} not found`);
+        }
+        // Ensure parent is in the same project
+        if (parentTask.projectId !== task.projectId) {
+          throw new Error('Parent task must be in the same project');
+        }
+      }
+    }
+
     const updatedTask: Task = {
       ...task,
       ...updates,
@@ -307,7 +363,8 @@ export class TaskService {
   }
 
   /**
-   * Delete a task and all its subtasks
+   * Delete a task and all its child tasks recursively
+   * Version 2.0: Updated for unified task model with recursive deletion
    */
   async deleteTask(id: string): Promise<boolean> {
     const data = await this.loadData();
@@ -317,13 +374,30 @@ export class TaskService {
       return false;
     }
 
-    // Remove task
-    data.tasks.splice(taskIndex, 1);
+    const task = data.tasks[taskIndex];
 
-    // Remove all subtasks of this task
-    data.subtasks = data.subtasks.filter(s => s.taskId !== id);
+    // Recursively delete all child tasks first
+    const childTasks = data.tasks.filter(t => t.parentId === id);
+    for (const child of childTasks) {
+      await this.deleteTask(child.id);
+    }
 
-    await this.saveData(data);
+    // Reload data after recursive deletions
+    const currentData = await this.loadData();
+    const currentTaskIndex = currentData.tasks.findIndex(t => t.id === id);
+
+    if (currentTaskIndex !== -1) {
+      // Remove the task itself
+      currentData.tasks.splice(currentTaskIndex, 1);
+
+      // Remove legacy subtasks if they exist (for backward compatibility)
+      if (currentData.subtasks) {
+        currentData.subtasks = currentData.subtasks.filter(s => s.taskId !== id);
+      }
+
+      await this.saveData(currentData);
+    }
+
     return true;
   }
 

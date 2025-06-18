@@ -6,11 +6,13 @@ import { isTaskSearchResult } from '../types/formTypes';
 
 /**
  * Tree item types for the task tree
+ * Version 2.0: Updated for unified task model
  */
-export type TaskTreeItemType = 'project' | 'task' | 'subtask' | 'search-prompt' | 'clear-search';
+export type TaskTreeItemType = 'project' | 'task' | 'search-prompt' | 'clear-search';
 
 /**
  * Tree item for the task tree view
+ * Version 2.0: Updated for unlimited task hierarchy
  */
 export class TaskTreeItem extends vscode.TreeItem {
   constructor(
@@ -59,11 +61,13 @@ export class TaskTreeItem extends vscode.TreeItem {
           const timeText = task.estimatedHours ? `Estimated: ${task.estimatedHours}h` : '';
           const actualTimeText = task.actualHours ? `Actual: ${task.actualHours}h` : '';
           const depsText = task.dependsOn && task.dependsOn.length > 0 ? `Dependencies: ${task.dependsOn.length}` : '';
+          const levelText = task.level !== undefined ? `Level: ${task.level}` : '';
 
           const details = [
             task.details,
             `Project: ${this.data.projectName}`,
             `Status: ${statusText}`,
+            levelText,
             priorityText,
             complexityText,
             tagsText,
@@ -76,7 +80,7 @@ export class TaskTreeItem extends vscode.TreeItem {
 
           return details;
         } else {
-          // Regular task
+          // Regular task (including legacy subtasks treated as tasks)
           const task = this.data as Task;
           const statusText = task.status || (task.completed ? 'done' : 'pending');
           const priorityText = task.priority ? `Priority: ${task.priority}/10` : '';
@@ -85,10 +89,13 @@ export class TaskTreeItem extends vscode.TreeItem {
           const timeText = task.estimatedHours ? `Estimated: ${task.estimatedHours}h` : '';
           const actualTimeText = task.actualHours ? `Actual: ${task.actualHours}h` : '';
           const depsText = task.dependsOn && task.dependsOn.length > 0 ? `Dependencies: ${task.dependsOn.length}` : '';
+          const levelText = task.level !== undefined ? `Level: ${task.level}` : '';
+          const parentText = task.parentId ? 'Has parent' : 'Top-level';
 
           const details = [
             task.details,
             `Status: ${statusText}`,
+            `${parentText}${levelText ? ` (${levelText})` : ''}`,
             priorityText,
             complexityText,
             tagsText,
@@ -100,9 +107,6 @@ export class TaskTreeItem extends vscode.TreeItem {
 
           return details;
         }
-      case 'subtask':
-        const subtask = this.data as Subtask;
-        return `${subtask.details}\n\nStatus: ${subtask.completed ? 'Completed' : 'Pending'}\nCreated: ${new Date(subtask.createdAt).toLocaleString()}`;
     }
   }
 
@@ -116,6 +120,11 @@ export class TaskTreeItem extends vscode.TreeItem {
       }
 
       const parts: string[] = [];
+
+      // Add level indicator for hierarchy
+      if (task.level !== undefined && task.level > 0) {
+        parts.push(`L${task.level}`);
+      }
 
       // Add status indicator
       if (task.status) {
@@ -165,13 +174,15 @@ export class TaskTreeItem extends vscode.TreeItem {
           const task = this.data.task;
           return new vscode.ThemeIcon(task.completed ? 'check' : 'circle-outline');
         } else {
-          // Regular task
+          // Regular task (unified model)
           const task = this.data as Task;
-          return new vscode.ThemeIcon(task.completed ? 'check' : 'circle-outline');
+          // Use different icons based on hierarchy level
+          if (task.level === undefined || task.level === 0) {
+            return new vscode.ThemeIcon(task.completed ? 'check' : 'circle-outline');
+          } else {
+            return new vscode.ThemeIcon(task.completed ? 'check' : 'dot');
+          }
         }
-      case 'subtask':
-        const subtask = this.data as Subtask;
-        return new vscode.ThemeIcon(subtask.completed ? 'check' : 'circle-outline');
     }
   }
 
@@ -186,13 +197,20 @@ export class TaskTreeItem extends vscode.TreeItem {
       return `task${task.completed ? '-completed' : ''}`;
     }
 
-    const completed = this.type !== 'project' && (this.data as Task | Subtask).completed;
-    return `${this.type}${completed ? '-completed' : ''}`;
+    if (this.type === 'task') {
+      const task = this.data as Task;
+      const completed = task.completed;
+      const level = task.level || 0;
+      return `task${completed ? '-completed' : ''}-level-${level}`;
+    }
+
+    return this.type;
   }
 }
 
 /**
  * Tree data provider for the task management view
+ * Version 2.0: Updated for unlimited task hierarchy
  */
 export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<TaskTreeItem | undefined | null | void> = new vscode.EventEmitter<TaskTreeItem | undefined | null | void>();
@@ -236,7 +254,7 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
    * Handle tree state updates when items are moved
    * Ensures proper tree expansion/collapse state is maintained
    */
-  handleItemMoved(_itemType: 'task' | 'subtask', _itemId: string, _oldParentId: string, _newParentId: string): void {
+  handleItemMoved(_itemType: 'task', _itemId: string, _oldParentId: string, _newParentId: string): void {
     // Fire a targeted refresh to update the tree structure
     // This is more efficient than a full refresh for large trees
     this.refresh();
@@ -295,17 +313,15 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
 
       switch (element.type) {
         case 'project':
-          return await this.getTaskItems((element.data as Project).id);
+          return await this.getTopLevelTaskItems((element.data as Project).id);
         case 'task':
           if (isTaskSearchResult(element.data)) {
-            // Search result task - no children
+            // Search result task - no children in search mode
             return [];
           } else {
-            // Regular task - return subtasks
-            return await this.getSubtaskItems((element.data as Task).id);
+            // Regular task - return child tasks (unlimited depth)
+            return await this.getChildTaskItems((element.data as Task).id);
           }
-        case 'subtask':
-          return []; // Subtasks have no children
         default:
           return [];
       }
@@ -363,39 +379,74 @@ export class TaskTreeProvider implements vscode.TreeDataProvider<TaskTreeItem> {
   }
 
   /**
-   * Get project tree items
+   * Get top-level task tree items for a project (parentId = undefined)
    */
-  private async getProjectItems(): Promise<TaskTreeItem[]> {
-    const projects = await this.taskService.getProjects();
-    return projects.map(project => new TaskTreeItem(
-      'project',
-      project,
-      vscode.TreeItemCollapsibleState.Collapsed
-    ));
+  private async getTopLevelTaskItems(projectId: string): Promise<TaskTreeItem[]> {
+    try {
+      // Get tasks with no parent (top-level tasks)
+      const tasks = await this.taskService.getTasksByParent(projectId, undefined);
+
+      return await Promise.all(tasks.map(async task => {
+        // Check if task has children to determine collapsible state
+        const hasChildren = await this.taskHasChildren(task.id);
+
+        return new TaskTreeItem(
+          'task',
+          task,
+          hasChildren ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+        );
+      }));
+    } catch (error) {
+      console.error('Error getting top-level tasks:', error);
+      return [];
+    }
   }
 
   /**
-   * Get task tree items for a project
+   * Get child task tree items for a parent task (unlimited depth)
    */
-  private async getTaskItems(projectId: string): Promise<TaskTreeItem[]> {
-    const tasks = await this.taskService.getTasks(projectId);
-    return tasks.map(task => new TaskTreeItem(
-      'task',
-      task,
-      vscode.TreeItemCollapsibleState.Collapsed
-    ));
+  private async getChildTaskItems(parentTaskId: string): Promise<TaskTreeItem[]> {
+    try {
+      const parentTask = await this.taskService.getTask(parentTaskId);
+      if (!parentTask) {
+        return [];
+      }
+
+      // Get child tasks for this parent
+      const childTasks = await this.taskService.getTasksByParent(parentTask.projectId, parentTaskId);
+
+      return await Promise.all(childTasks.map(async task => {
+        // Check if task has children to determine collapsible state
+        const hasChildren = await this.taskHasChildren(task.id);
+
+        return new TaskTreeItem(
+          'task',
+          task,
+          hasChildren ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+        );
+      }));
+    } catch (error) {
+      console.error('Error getting child tasks:', error);
+      return [];
+    }
   }
 
   /**
-   * Get subtask tree items for a task
+   * Check if a task has children
    */
-  private async getSubtaskItems(taskId: string): Promise<TaskTreeItem[]> {
-    const subtasks = await this.taskService.getSubtasks(taskId);
-    return subtasks.map(subtask => new TaskTreeItem(
-      'subtask',
-      subtask,
-      vscode.TreeItemCollapsibleState.None
-    ));
+  private async taskHasChildren(taskId: string): Promise<boolean> {
+    try {
+      const task = await this.taskService.getTask(taskId);
+      if (!task) {
+        return false;
+      }
+
+      const children = await this.taskService.getTasksByParent(task.projectId, taskId);
+      return children.length > 0;
+    } catch (error) {
+      console.error('Error checking if task has children:', error);
+      return false;
+    }
   }
 
   /**

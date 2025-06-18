@@ -63,9 +63,8 @@ export function activate(context: vscode.ExtensionContext) {
 			} else if (item.type === 'clear-search') {
 				vscode.commands.executeCommand('agentic-tools.onTaskTreeItemClick', item);
 			} else if (item.type === 'task') {
+				// For unified model, all tasks (including child tasks) use editTask
 				vscode.commands.executeCommand('agentic-tools.editTask', item);
-			} else if (item.type === 'subtask') {
-				vscode.commands.executeCommand('agentic-tools.editSubtask', item);
 			}
 		}
 	});

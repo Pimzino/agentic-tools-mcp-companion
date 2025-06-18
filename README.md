@@ -18,16 +18,21 @@ This VS Code extension is part of a complete task and memory management ecosyste
 
 ## Features
 
-### 🎯 Enhanced Task Management
-- **Hierarchical Tree View**: Projects → Tasks → Subtasks with rich visual indicators
-- **Enhanced Task Metadata**: Priority (1-10), complexity (1-10), status workflow, tags, and time tracking
+### 🎯 Enhanced Task Management with Unlimited Hierarchy (v0.1.0)
+- **Unlimited Hierarchy Tree View**: Projects → Tasks → Subtasks → Sub-subtasks → infinite depth nesting
+- **Unified Task Model**: Single task interface supporting unlimited nesting depth with rich visual indicators
+- **Level-Based Visual Indicators**: Different icons and indentation for each hierarchy level (L0, L1, L2, etc.)
+- **Enhanced Task Metadata**: Priority (1-10), complexity (1-10), status workflow, tags, and time tracking at every level
 - **Visual Status Indicators**: ⏳ Pending, 🔄 In Progress, 🚫 Blocked, ✅ Done with emoji display
 - **Priority & Complexity Badges**: 🔥 High Priority (8+), ⚡ Medium Priority (6+), 🧩 High Complexity (8+)
 - **Rich Form Editors**: Comprehensive forms with responsive design and validation
 - **Time Tracking**: Estimated and actual hours with decimal precision
 - **Tag Management**: Comma-separated tag input for categorization and filtering
-- **Parent Selection & Management**: Choose parent projects/tasks during creation and move items between parents
-- **Rich Tooltips**: Hover to see complete task information including all metadata
+- **Unlimited Depth Operations**: Create, edit, move, and delete tasks at any hierarchy level
+- **Parent Selection & Management**: Choose parent tasks at any hierarchy level during creation
+- **Hierarchy Reorganization**: Move tasks between any hierarchy levels seamlessly
+- **Rich Tooltips**: Hover to see complete task information including hierarchy path and metadata
+- **Automatic Migration**: Seamless upgrade from old 3-level to unlimited depth model
 - **Real-time Updates**: Automatic refresh when data changes
 
 ### 📝 Rich Task Forms (MCP v1.7.0 Compatible)
@@ -106,16 +111,29 @@ For the full experience with AI assistant integration:
 
 ### Enhanced Task Management
 
-#### Visual Task Tree
-The extension displays your tasks with rich visual indicators:
+#### Visual Task Tree with Unlimited Hierarchy
+The extension displays your tasks with rich visual indicators and unlimited depth:
 
 ```
 📁 Project: Website Redesign
-├── 🔥⚡ Design mockups (Priority: 8, Complexity: 6) [16h] ⏳
-│   ├── ✅ Create wireframes
-│   └── 🔄 Design high-fidelity mockups
-├── 🧩 Backend API (Priority: 7, Complexity: 9) [32h] 🚫
-└── ✅ Setup development environment (Priority: 9, Complexity: 3) [4h] ✅
+├── 🔥⚡ Design mockups (L0: Priority: 8, Complexity: 6) [16h] ⏳
+│   ├── ✅ Create wireframes (L1) [4h]
+│   ├── 🔄 Design high-fidelity mockups (L1) [8h]
+│   │   ├── ⏳ Homepage design (L2) [3h]
+│   │   ├── ⏳ Product page design (L2) [3h]
+│   │   └── ⏳ Contact page design (L2) [2h]
+│   └── ⏳ Create design system (L1) [4h]
+│       ├── ⏳ Color palette (L2) [1h]
+│       ├── ⏳ Typography rules (L2) [1h]
+│       └── ⏳ Component library (L2) [2h]
+│           ├── ⏳ Button components (L3) [0.5h]
+│           ├── ⏳ Form components (L3) [1h]
+│           └── ⏳ Navigation components (L3) [0.5h]
+├── 🧩 Backend API (L0: Priority: 7, Complexity: 9) [32h] 🚫
+│   ├── ⏳ Database schema (L1) [8h]
+│   ├── ⏳ User authentication (L1) [12h]
+│   └── ⏳ API endpoints (L1) [12h]
+└── ✅ Setup development environment (L0: Priority: 9, Complexity: 3) [4h] ✅
 ```
 
 **Visual Indicators:**
@@ -123,6 +141,8 @@ The extension displays your tasks with rich visual indicators:
 - 🧩 High Complexity (8+)
 - ⏳ Pending, 🔄 In Progress, 🚫 Blocked, ✅ Done
 - [16h] Estimated hours display
+- (L0, L1, L2, L3) Hierarchy level indicators
+- Unlimited depth nesting with proper indentation
 
 #### Task Operations
 - **Create Project**: Click the "+" button in the Tasks view title

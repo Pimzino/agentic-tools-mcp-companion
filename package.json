@@ -2,7 +2,7 @@
   "name": "agentic-tools-mcp-companion",
   "displayName": "Agentic Tools MCP Companion",
   "description": "Visual task management companion for MCP server @pimzino/agentic-tools-mcp with enhanced metadata support",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "publisher": "Pimzino",
   "engines": {
     "vscode": "^1.96.0"

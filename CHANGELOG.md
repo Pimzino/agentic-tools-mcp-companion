@@ -2,6 +2,118 @@
 
 All notable changes to the Agentic Tools MCP Companion VS Code extension will be documented in this file.
 
+## [0.1.0] - 2025-06-19
+
+### 🚀 MAJOR: Unified Task Model with Unlimited Hierarchy Support
+
+This release brings the VS Code extension into alignment with MCP Server v1.8.0, implementing full support for the revolutionary unified task model with unlimited hierarchy depth while maintaining an intuitive visual interface.
+
+### Added
+
+#### ✨ Unlimited Hierarchy Visual Support
+- **Unified Tree Display**: Single task tree supporting unlimited nesting depth (tasks → subtasks → sub-subtasks → etc.)
+- **Level-Based Visual Indicators**: Different icons and indentation for each hierarchy level
+- **Hierarchical Navigation**: Expandable/collapsible tree structure for unlimited depth exploration
+- **Level Indicators**: Clear visual markers showing task hierarchy level (L0, L1, L2, etc.)
+- **Parent-Child Visualization**: Clear parent-child relationships in tree structure
+
+#### 🔄 Automatic Migration Integration
+- **Seamless Upgrade**: Extension automatically works with migrated task data from MCP server
+- **Legacy Compatibility**: Existing subtasks display correctly as migrated tasks with parentId
+- **Migration Status**: Visual feedback during and after task model migration
+- **Data Preservation**: All existing task relationships maintained through migration
+
+#### 🛠️ Enhanced Task Operations
+- **Unlimited Depth Creation**: Create tasks at any hierarchy level using parentId
+- **Hierarchy Reorganization**: Move tasks between any hierarchy levels seamlessly
+- **Recursive Operations**: Task operations (edit, delete) work across unlimited depth
+- **Context-Aware Actions**: Actions adapt based on task hierarchy level and position
+
+### Enhanced
+
+#### 🌲 Task Tree Provider v2.0
+- **Unified Model**: Single Task interface replaces separate task/subtask handling
+- **Unlimited Depth Support**: Tree recursively builds hierarchy to any depth
+- **Dynamic Icons**: Level-appropriate icons for different hierarchy depths
+- **Enhanced Context**: Context values reflect hierarchy levels for proper menu display
+- **Performance Optimized**: Efficient tree building for large hierarchies
+
+#### 📊 Task Service Updates
+- **Unified Operations**: All task operations work with unified Task model
+- **Hierarchy Methods**: New methods for unlimited depth task management
+- **Parent-Child Queries**: Efficient queries for hierarchical task relationships
+- **Migration Support**: Built-in support for legacy subtask migration
+
+#### 🎨 Visual Hierarchy Improvements
+- **Level-Based Styling**: Different visual treatment for each hierarchy level
+- **Indentation System**: Clear visual nesting with proper indentation
+- **Icon Differentiation**: Top-level tasks use circle icons, child tasks use dot icons
+- **Status Inheritance**: Visual status patterns flow through hierarchy levels
+
+### Changed
+
+#### 🔄 Unified Task Model Implementation
+- **Single Task Interface**: Eliminated separate subtask types and interfaces
+- **ParentId Support**: All task operations support parentId for hierarchy management
+- **Level Calculation**: Automatic hierarchy level calculation and display
+- **Context Menu Updates**: Updated context menus to work with unified model
+
+#### 📱 UI/UX Improvements for Hierarchy
+- **Enhanced Tooltips**: Show hierarchy path and level information
+- **Improved Descriptions**: Display hierarchy context in task descriptions
+- **Better Navigation**: Easier navigation through unlimited depth structures
+- **Clear Breadcrumbs**: Visual hierarchy path indicators
+
+### Migration & Compatibility
+
+#### ✅ Seamless Backward Compatibility
+- **Zero Breaking Changes**: All existing functionality preserved
+- **Automatic Adaptation**: Extension automatically adapts to unified task model
+- **Legacy Support**: Existing subtask context menus continue to work
+- **Data Integrity**: All task relationships and metadata preserved
+
+#### 🎯 Migration Features
+- **Transparent Migration**: Extension handles migrated data transparently
+- **Visual Consistency**: Migrated tasks display with consistent visual hierarchy
+- **Operation Continuity**: All task operations continue to work during and after migration
+- **Progressive Enhancement**: New unlimited depth features available immediately
+
+### Technical Architecture
+
+#### 🏗️ Core Implementation Updates
+- **TaskTreeProvider**: Complete rewrite for unlimited depth support
+- **TaskService**: Updated to handle unified Task model operations
+- **Type Definitions**: Enhanced TypeScript types for unlimited hierarchy
+- **Context Handling**: Improved context value system for hierarchy levels
+
+#### 📊 Performance Optimizations
+- **Efficient Tree Building**: Optimized recursive tree construction
+- **Lazy Loading**: Child tasks loaded on demand for large hierarchies
+- **Memory Management**: Efficient handling of large task hierarchies
+- **Render Optimization**: Smart re-rendering for hierarchy changes
+
+### Use Cases & Benefits
+
+#### 🎯 Enhanced Workflow Support
+- **Agile Development**: Epic → Feature → Story → Task → Subtask hierarchies
+- **Project Management**: Project → Phase → Milestone → Deliverable → Action hierarchies
+- **Research Projects**: Research → Topic → Question → Investigation → Finding hierarchies
+- **Complex Planning**: Unlimited breakdown granularity for any project size
+
+#### 👥 Improved User Experience
+- **Flexible Organization**: Organize tasks exactly as needed without depth limitations
+- **Visual Clarity**: Clear tree visualization of complex project structures
+- **Intuitive Navigation**: Natural hierarchy exploration and management
+- **Better Context**: Enhanced understanding of task relationships and dependencies
+
+#### 🤖 AI Agent Integration
+- **Rich Context**: AI agents access comprehensive hierarchy information
+- **Unlimited Depth**: AI can create and manage tasks at any hierarchy level
+- **Visual Feedback**: Human users see AI task organization in unified tree view
+- **Seamless Collaboration**: Perfect integration between human visual management and AI automation
+
+---
+
 ## [1.0.0] - 2025-01-28
 
 ### 🚀 MAJOR: Enhanced Task Management UI with MCP Server v1.7.0 Compatibility

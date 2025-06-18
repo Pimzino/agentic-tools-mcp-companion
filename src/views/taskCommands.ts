@@ -149,7 +149,7 @@ export async function deleteTask(taskService: TaskService, item: TaskTreeItem): 
 }
 
 /**
- * Create a new subtask using the rich editor interface
+ * Create a new subtask (child task) using the rich editor interface
  */
 export async function createSubtask(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
 	if (item.type !== 'task') {return;}
@@ -175,79 +175,80 @@ export async function createSubtask(taskService: TaskService, item: TaskTreeItem
 }
 
 /**
- * Edit a subtask using the rich editor interface
+ * Edit a subtask (child task) using the rich editor interface
  */
 export async function editSubtask(taskService: TaskService, item: TaskTreeItem, extensionUri: vscode.Uri): Promise<void> {
-	if (item.type !== 'subtask') {return;}
+	if (item.type !== 'task') {return;}
 
-	const subtask = item.data as Subtask;
+	const task = item.data as Task;
 	try {
-		const subtaskEditor = new SubtaskEditor(extensionUri, taskService);
+		// For unified model, use TaskEditor for all tasks regardless of hierarchy level
+		const taskEditor = new TaskEditor(extensionUri, taskService);
 
-		const editorData: SubtaskEditorData = {
+		const editorData: TaskEditorData = {
 			mode: 'edit',
-			subtask: subtask
+			task: task
 		};
 
-		await subtaskEditor.show(editorData);
+		await taskEditor.show(editorData);
 	} catch (error) {
-		const serviceError = ErrorUtils.createServiceError('SubtaskEditor', 'show', error);
+		const serviceError = ErrorUtils.createServiceError('TaskEditor', 'show', error);
 		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('edit_subtask_editor', {
-			subtaskId: subtask.id,
-			subtaskName: subtask.name
+			taskId: task.id,
+			taskName: task.name
 		}));
 	}
 }
 
 /**
- * Toggle subtask completion
+ * Toggle subtask (child task) completion
  */
 export async function toggleSubtask(taskService: TaskService, item: TaskTreeItem): Promise<void> {
-	if (item.type !== 'subtask') {return;}
+	if (item.type !== 'task') {return;}
 
-	const subtask = item.data as Subtask;
-	const newStatus = !subtask.completed;
+	const task = item.data as Task;
+	const newStatus = !task.completed;
 
 	try {
-		await taskService.updateSubtask(subtask.id, {
+		await taskService.updateTask(task.id, {
 			completed: newStatus
 		});
 
 		const statusText = newStatus ? 'completed' : 'pending';
-		vscode.window.showInformationMessage(`Subtask "${subtask.name}" marked as ${statusText}!`);
+		vscode.window.showInformationMessage(`Task "${task.name}" marked as ${statusText}!`);
 	} catch (error) {
-		const serviceError = ErrorUtils.createServiceError('TaskService', 'updateSubtask', error);
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'updateTask', error);
 		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('toggle_subtask', {
-			subtaskId: subtask.id,
-			subtaskName: subtask.name,
+			taskId: task.id,
+			taskName: task.name,
 			newStatus
 		}));
 	}
 }
 
 /**
- * Delete a subtask
+ * Delete a subtask (child task)
  */
 export async function deleteSubtask(taskService: TaskService, item: TaskTreeItem): Promise<void> {
-	if (item.type !== 'subtask') {return;}
+	if (item.type !== 'task') {return;}
 
-	const subtask = item.data as Subtask;
+	const task = item.data as Task;
 	try {
 		const confirmation = await vscode.window.showWarningMessage(
-			`Are you sure you want to delete subtask "${subtask.name}"?`,
+			`Are you sure you want to delete task "${task.name}"? This will also delete all child tasks.`,
 			{ modal: true },
 			'Delete'
 		);
 
 		if (confirmation !== 'Delete') {return;}
 
-		await taskService.deleteSubtask(subtask.id);
-		vscode.window.showInformationMessage(`Subtask "${subtask.name}" deleted successfully!`);
+		await taskService.deleteTask(task.id);
+		vscode.window.showInformationMessage(`Task "${task.name}" deleted successfully!`);
 	} catch (error) {
-		const serviceError = ErrorUtils.createServiceError('TaskService', 'deleteSubtask', error);
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'deleteTask', error);
 		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('delete_subtask', {
-			subtaskId: subtask.id,
-			subtaskName: subtask.name
+			taskId: task.id,
+			taskName: task.name
 		}));
 	}
 }
@@ -500,31 +501,31 @@ export async function moveTaskToProject(taskService: TaskService, taskTreeProvid
 }
 
 /**
- * Move subtask to a different task
+ * Move subtask (child task) to a different parent task
  */
 export async function moveSubtaskToTask(taskService: TaskService, taskTreeProvider: TaskTreeProvider, item: TaskTreeItem): Promise<void> {
-	if (item.type !== 'subtask') {return;}
+	if (item.type !== 'task') {return;}
 
-	const subtask = item.data as Subtask;
+	const task = item.data as Task;
 	try {
-		// Get available tasks
-		const taskOptions = await taskService.getAvailableTasksForSubtask(subtask.id);
+		// Get available tasks for moving this child task
+		const taskOptions = await taskService.getAvailableTasksForSubtask(task.id);
 
 		if (taskOptions.length === 0) {
-			vscode.window.showInformationMessage('No other tasks available to move this subtask to.');
+			vscode.window.showInformationMessage('No other tasks available to move this task to.');
 			return;
 		}
 
 		// Show task selection grouped by project
-		const taskItems = taskOptions.map(task => ({
-			label: task.name,
-			description: `${task.projectName} • ${task.subtaskCount} subtask(s)`,
-			detail: task.projectName,
-			taskId: task.id
+		const taskItems = taskOptions.map(availableTask => ({
+			label: availableTask.name,
+			description: `${availableTask.projectName} • ${availableTask.subtaskCount} child task(s)`,
+			detail: availableTask.projectName,
+			taskId: availableTask.id
 		}));
 
 		const selectedTask = await vscode.window.showQuickPick(taskItems, {
-			placeHolder: `Select task to move "${subtask.name}" to`,
+			placeHolder: `Select task to move "${task.name}" to`,
 			matchOnDescription: true,
 			matchOnDetail: true
 		});
@@ -532,48 +533,49 @@ export async function moveSubtaskToTask(taskService: TaskService, taskTreeProvid
 		if (!selectedTask) {return;}
 
 		// Validate the move
-		const validation = await taskService.validateParentAssignment('subtask', subtask.id, selectedTask.taskId);
+		const validation = await taskService.validateParentAssignment('task', task.id, selectedTask.taskId);
 
 		if (!validation.isValid) {
-			vscode.window.showErrorMessage(`Cannot move subtask: ${validation.errors.join(', ')}`);
+			vscode.window.showErrorMessage(`Cannot move task: ${validation.errors.join(', ')}`);
 			return;
 		}
 
 		// Show confirmation if required
 		if (validation.requiresConfirmation) {
 			const confirmationMessage = [
-				`Move subtask "${subtask.name}" to task "${selectedTask.label}"?`,
+				`Move task "${task.name}" to parent task "${selectedTask.label}"?`,
 				...validation.warnings
 			].join('\n\n');
 
 			const confirmation = await vscode.window.showWarningMessage(
 				confirmationMessage,
 				{ modal: true },
-				'Move Subtask'
+				'Move Task'
 			);
 
-			if (confirmation !== 'Move Subtask') {return;}
+			if (confirmation !== 'Move Task') {return;}
 		}
 
-		// Perform the move
-		const result: MoveOperationResult = await taskService.moveSubtaskToTask(subtask.id, selectedTask.taskId);
+		// Perform the move by updating the parentId
+		await taskService.updateTask(task.id, { parentId: selectedTask.taskId });
+		const result = { success: true, warnings: [] };
 
 		if (result.success) {
 			// Refresh tree to show new structure
 			taskTreeProvider.refreshAfterParentMove();
 
 			// Show success message
-			let message = `Subtask "${subtask.name}" moved to task "${selectedTask.label}" successfully!`;
+			let message = `Task "${task.name}" moved to parent task "${selectedTask.label}" successfully!`;
 			if (result.warnings && result.warnings.length > 0) {
 				message += '\n\nWarnings:\n' + result.warnings.join('\n');
 			}
 			vscode.window.showInformationMessage(message);
 		}
 	} catch (error) {
-		const serviceError = ErrorUtils.createServiceError('TaskService', 'moveSubtaskToTask', error);
-		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('move_subtask_to_task', {
-			subtaskId: subtask.id,
-			subtaskName: subtask.name
+		const serviceError = ErrorUtils.createServiceError('TaskService', 'updateTask', error);
+		ErrorHandler.handleError(serviceError, ErrorHandler.createContext('move_task_to_parent', {
+			taskId: task.id,
+			taskName: task.name
 		}));
 	}
 }
