@@ -2,6 +2,7 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/Pimzino/agentic-tools-mcp-companion.svg)](https://github.com/Pimzino/agentic-tools-mcp-companion/stargazers)
 [![GitHub license](https://img.shields.io/github/license/Pimzino/agentic-tools-mcp-companion.svg)](https://github.com/Pimzino/agentic-tools-mcp-companion/blob/main/LICENSE)
+[![Open VSX Version](https://img.shields.io/open-vsx/v/Pimzino/agentic-tools-mcp-companion?label=Open%20VSX)](https://open-vsx.org/extension/Pimzino/agentic-tools-mcp-companion)
 [![VS Code Version](https://img.shields.io/badge/VS%20Code-1.96.0+-brightgreen.svg)](https://code.visualstudio.com/)
 [![Node.js Version](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
